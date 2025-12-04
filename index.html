@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<!-- Copyright 2025 Uwe Martin
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+-->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aquarium Controller</title>
+   
+    <!-- LIBRARIES -->
+    <!-- Vue 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+   
+    <!-- Local installation of libraries -->
+    <!-- <script src="node_modules/moment/min/moment.min.js"></script> -->
+    <!-- <script src="node_modules/chart.js/dist/Chart.min.js"></script> -->
+    <!-- Download from remote libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.4/Chart.min.js"></script>
+ 
+    <style>
+        :root {
+            --primary: #1847b8;
+            --accent: #e6e6e6;
+            --text: #333;
+            --bg: #ffffff;
+        }
+ 
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f2f2f2;
+            color: var(--text);
+        }
+ 
+        /* Header */
+        header {
+            background-color: var(--primary);
+            color: white;
+            padding: 2rem 1rem;
+            text-align: center;
+        }
+ 
+        header h1 { margin: 0; font-weight: 400; text-transform: uppercase; letter-spacing: 1px; }
+ 
+        /* Layout Container */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+ 
+        /* --- TOP TILES (Status) --- */
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 15px;
+            margin-bottom: 40px;
+            margin-top: -40px; /* Overlap effect */
+        }
+ 
+        .status-card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+ 
+        .status-card:hover { transform: translateY(-5px); }
+ 
+        .status-card img { width: 50px; height: 50px; margin-bottom: 10px; opacity: 0.6; }
+        .status-card h4 { margin: 0; font-size: 1.5rem; color: var(--primary); }
+        .status-card span { display: block; font-size: 0.8rem; color: #777; margin-top: 5px; text-transform: uppercase; }
+ 
+        /* --- CHART SECTION --- */
+        .section-title {
+            text-align: center;
+            margin-bottom: 20px;
+            border-left: 5px solid var(--primary);
+            padding-left: 15px;
+            display: inline-block;
+        }
+ 
+        .chart-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr)); /* Responsive columns */
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+ 
+        .chart-wrapper {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            position: relative;
+            height: 350px; /* specific height for Chart.js responsiveness */
+        }
+ 
+        /* --- NAVIGATION LINKS --- */
+        .nav-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 15px;
+            list-style: none;
+            padding: 0;
+        }
+ 
+        .nav-item {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            border-left: 4px solid var(--primary);
+        }
+ 
+        .nav-item h5 { margin: 0 0 10px 0; font-size: 1.1rem; }
+        .nav-item p { margin: 0 0 15px 0; font-size: 0.9rem; color: #666; }
+       
+        .btn {
+            display: inline-block;
+            background-color: var(--primary);
+            color: white;
+            padding: 8px 20px;
+            border-radius: 20px;
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: background 0.2s;
+        }
+        .btn:hover { background-color: #12368a; }
+ 
+        /* Mobile adjustments */
+        @media (max-width: 600px) {
+            .chart-grid { grid-template-columns: 1fr; }
+            .header { padding: 3rem 1rem 3rem 1rem; }
+        }
+
+        /* --- AUTH DIALOG STYLES --- */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+            width: 90%;
+            max-width: 400px;
+        }
+
+        .modal-content h3 {
+            margin-top: 0;
+            color: var(--primary);
+            border-bottom: 2px solid var(--accent);
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-sizing: border-box; 
+        }
+
+        .modal-actions {
+            text-align: right;
+            margin-top: 20px;
+        }
+
+        .btn {
+            /* Ensure this style is defined for the button */
+            cursor: pointer; 
+        }
+    </style>
+</head>
+<body>
+ 
+<div id="app">
+    <header>
+        <h1>Aquarium Controller</h1>
+        <p style="opacity: 0.8; font-size: 0.9rem;">Dashboard</p>
+    </header>
+ 
+    <div class="container">
+       
+        <!-- 1. LIVE STATUS TILES -->
+        <div class="status-grid">
+            <!-- We loop through the status object -->
+            <div class="status-card">
+                <img src="images/1843544.png" onerror="this.style.display='none'">
+                <h4>{{ overview.waterTemperature }} <small style="font-size:0.5em">°C</small></h4>
+                <span>Temp</span>
+            </div>
+            <div class="status-card">
+                <img src="images/4236594.png" onerror="this.style.display='none'">
+                <h4>{{ overview.phValue }}</h4>
+                <span>pH</span>
+            </div>
+            <div class="status-card">
+                <img src="images/9803219.png" onerror="this.style.display='none'">
+                <h4>{{ overview.conductivity }} <small style="font-size:0.5em">mS/cm</small></h4>
+                <span>Conductivity</span>
+            </div>
+            <div class="status-card">
+                <img src="images/5109802.png" onerror="this.style.display='none'">
+                <h4>{{ overview.tankLevelSwitchPosition }}</h4>
+                <span>Level</span>
+            </div>
+            <div class="status-card">
+                <img src="images/748967.png" onerror="this.style.display='none'">
+                <h4>{{ overview.heatingStatus }}</h4>
+                <span>Heating</span>
+            </div>
+            <div class="status-card">
+                <img src="images/9602773.png" onerror="this.style.display='none'">
+                <h4>{{ overview.surfaceVentilationStatus }}</h4>
+                <span>Ventilation</span>
+            </div>
+        </div>
+ 
+        <!-- 2. CHARTS -->
+        <div>
+            <h2 class="section-title">Data Visualization (Last 24h)</h2>
+        </div>
+       
+        <div class="chart-grid">
+            <div class="chart-wrapper">
+                <canvas id="TempChart"></canvas>
+            </div>
+            <div class="chart-wrapper">
+                <canvas id="pHChart"></canvas>
+            </div>
+            <div class="chart-wrapper">
+                <canvas id="ConducChart"></canvas>
+            </div>
+            <div class="chart-wrapper">
+                <canvas id="AmbientChart"></canvas>
+            </div>
+        </div>
+ 
+        <!-- 3. Logs -->
+        <div>
+            <h2 class="section-title">Logs</h2>
+        </div>
+        <div class="nav-list">
+            <div class="nav-item">
+                <h5>Refill Events</h5>
+                <p>Check fresh water refill history.</p>
+                <a href="refilllog.html" class="btn">Show</a>
+            </div>
+            <div class="nav-item">
+                <h5>Feed Events</h5>
+                <p>Feeder actuation history.</p>
+                <a href="feedlog.html.php" class="btn">Show</a>
+            </div>
+            <div class="nav-item">
+                <h5>Balling Events</h5>
+                <p>Mineral dosing statistics.</p>
+                <a href="ballinglog.html" class="btn">Show</a>
+            </div>
+        </div>
+
+        <!-- 4. Configuration -->
+        <div>
+            <h2 class="section-title">Configuration</h2>
+        </div>
+        <div class="nav-list">
+            <div class="nav-item">
+                <h5>Feed Profile</h5>
+                <p>Configure profiles and schedule them</p>
+                <a href="configurefeed.html" class="btn">Configure</a>
+            </div>
+            <div class="nav-item">
+                <h5>Balling mineral dosing</h5>
+                <p>Configure dosing of different minerals</p>
+                <a href="configureballing.html" class="btn">Configure</a>
+            </div>
+            <div class="nav-item">
+                <h5>Ventilation control</h5>
+                <p>Setup parameters for ventilation control</p>
+                <a href="configureventilation.html" class="btn">Configure</a>
+            </div>
+            <div class="nav-item">
+                <h5>Heating control</h5>
+                <p>Setup parameters for heating control</p>
+                <a href="configureheating.html" class="btn">Configure</a>
+            </div>
+        </div> 
+    </div>
+    <div class="modal-overlay" v-if="showAuthDialog">
+        <div class="modal-content">
+            <h3>🔒 API Authorization Required</h3>
+            <form @submit.prevent="login">
+                <div class="form-group">
+                    <label for="username">Username:</label>
+                    <input type="text" id="username" v-model="inputUsername" required autofocus>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password:</label>
+                    <input type="password" id="password" v-model="inputPassword" required>
+                </div>
+                <p v-if="loginError" style="color: red; font-size: 0.9rem;">{{ loginError }}</p>
+                <div class="modal-actions">
+                    <button type="submit" class="btn">Login</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+ 
+<script>
+    const { createApp, ref, onMounted } = Vue;
+ 
+    createApp({
+        setup() {
+            // --- AUTH STATE ---
+            const showAuthDialog = ref(true);
+            const inputUsername = ref('');
+            const inputPassword = ref('');
+            const loginError = ref('');
+            // Stores the Base64 encoded Basic Auth string, e.g., "Basic dXNlcm5hbWU6cGFzc3dvcmQ="
+            const credentials = ref('');
+            
+            // --- REACTIVE STATE ---
+            const overview = ref({
+                temp: '--', ph: '--', conduc: '--', level: '--', heating: '--', ventilation: '--'
+            });
+           
+            const rawChartData = ref([]); // Holds the array from the PHP script
+            
+            // --- CORE FUNCTION: WRAPPED FETCH FOR AUTH ---
+            const doFetch = async (url, options = {}) => {
+                const headers = {
+                    ...options.headers,
+                    // Add Authorization header to all requests
+                    'Authorization': credentials.value
+                };
+                
+                try {
+                    const response = await fetch(url, { ...options, headers });
+                    
+                    if (response.status === 401) {
+                        // Authorization failed or expired, prompt user
+                        loginError.value = 'Authorization failed. Please re-enter your credentials.';
+                        showAuthDialog.value = true;
+                        // Throw to stop further execution in the calling function
+                        throw new Error("Unauthorized"); 
+                    }
+                    
+                    if (!response.ok) {
+                        const errorBody = await response.json().catch(() => ({}));
+                        throw new Error(`HTTP error! status: ${response.status}. API message: ${errorBody.error || 'Unknown error'}`);
+                    }
+                    
+                    return response;
+                } catch (e) {
+                    console.error("Fetch error:", e);
+                    // If not a 401, we still let the error propagate
+                    if (e.message !== "Unauthorized") {
+                         loginError.value = `API request failed: ${e.message}`;
+                    }
+                    throw e; 
+                }
+            };
+
+            // --- LOGIN METHOD ---
+            const login = async () => {
+                loginError.value = '';
+                const user = inputUsername.value.trim();
+                const pass = inputPassword.value;
+                
+                if (!user || !pass) {
+                    loginError.value = 'Please enter both username and password.';
+                    return;
+                }
+                
+                // 1. Create the Base64 encoded string: "username:password"
+                const encoded = btoa(`${user}:${pass}`);
+                const authHeader = `Basic ${encoded}`;
+                
+                // 2. Test the credentials against the API's check_auth endpoint
+                try {
+                    // Use standard fetch here, but manually add the calculated header
+                    const response = await fetch('http://localhost:8080/api.php?action=check_auth', {
+                        headers: {
+                            'Authorization': authHeader
+                        }
+                    });
+
+                    if (response.ok) {
+                        // Credentials valid, save them, close dialog, and load data
+                        credentials.value = authHeader;
+                        showAuthDialog.value = false;
+                        
+                        localStorage.setItem('aquarium_auth', authHeader);
+
+                        // Clear input and error fields
+                        inputUsername.value = '';
+                        inputPassword.value = '';
+                        
+                        // Now that we are authorized, load initial data
+                        fetchOverviewData();
+                        fetchTimeData();
+                        // Re-start interval
+                        startIntervals();
+                    } else if (response.status === 401) {
+                        loginError.value = 'Invalid username or password.';
+                    } else {
+                        loginError.value = `Connection error: Status ${response.status}`;
+                    }
+                } catch (e) {
+                    loginError.value = 'Could not connect to the API server.';
+                    console.error("Login test failed:", e);
+                }
+            };
+            
+            // --- DATA FETCHERS ---
+            const fetchOverviewData = async () => {
+                if (!credentials.value) return; // Skip if not authorized yet
+                try {
+                    const response = await doFetch('http://localhost:8080/api.php?action=load_overview_signals');
+                    if(response.ok) {
+                        overview.value = await response.json();
+                    }
+                } catch (e) {
+                    console.error("API not found.");
+                }
+            };
+ 
+            const fetchTimeData = async () => {
+                if (!credentials.value) return; // Skip if not authorized yet
+                try {
+                    const res = await doFetch('http://localhost:8080/api.php?action=load_time_data');
+                    if(res.ok) {
+                        const json = await res.json();
+                        rawChartData.value = json;
+                        console.log("Time data loaded:", json);
+                        renderCharts(json); // Trigger chart drawing
+                    } else {
+                        console.error("Failed to load time data");
+                    }
+                } catch (e) {
+                    console.error("Error fetching time data:", e);
+                }
+            };
+            // -------
+
+            // --- DATA GENERATORS (Ported from your script) ---
+            // We use a generic function to reduce code duplication
+            const generateData = (dataArray, key) => {
+                return dataArray.map(item => ({
+                    t: moment(item.timestamp).valueOf(),
+                    y: item[key]
+                }));
+            };
+ 
+            // --- CHART HELPER: Adapt Ticks (Ported exactly) ---
+            const adaptTicks = (scale, ticks) => {
+                var majorUnit = scale._majorUnit;
+                var firstTick = ticks[0];
+                var i, ilen, val, tick, currMajor, lastMajor;
+ 
+                if (!ticks || ticks.length === 0) return ticks;
+ 
+                val = moment(ticks[0].value);
+                if ((majorUnit === 'minute' && val.second() === 0)
+                || (majorUnit === 'hour' && val.minute() === 0)
+                || (majorUnit === 'day' && val.hour() === 9)
+                || (majorUnit === 'month' && val.date() <= 3 && val.isoWeekday() === 1)
+                || (majorUnit === 'year' && val.month() === 0)) {
+                    firstTick.major = true;
+                } else {
+                    firstTick.major = false;
+                }
+                lastMajor = val.get(majorUnit);
+ 
+                for (i = 1, ilen = ticks.length; i < ilen; i++) {
+                    tick = ticks[i];
+                    val = moment(tick.value);
+                    currMajor = val.get(majorUnit);
+                    tick.major = currMajor !== lastMajor;
+                    lastMajor = currMajor;
+                }
+                return ticks;
+            };
+ 
+            // --- MAIN CHART RENDERING ---
+            const renderCharts = (data) => {
+                // 1. Temperature Chart
+                new Chart(document.getElementById('TempChart').getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        datasets: [
+                            {
+                                label: 'Water Temperature Filtered',
+                                borderColor: 'rgba(0, 0, 255, 1.0)',
+                                data: generateData(data, 'waterTemperatureFiltered'),
+                                pointRadius: 0, fill: false, lineTension: 0, borderWidth: 2, yAxisID: 'y-axis-1'
+                            },
+                            {
+                                label: 'Water Temperature',
+                                borderColor: 'rgba(255, 99, 132, 1.0)',
+                                data: generateData(data, 'waterTemperature'),
+                                pointRadius: 0, fill: false, lineTension: 0, borderWidth: 2, yAxisID: 'y-axis-1'
+                            },
+                            {
+                                label: 'Surface ventilation',
+                                borderColor: 'rgba(255, 255, 132, 1.0)',
+                                data: generateData(data, 'surfaceVentilationStatus'),
+                                pointRadius: 0, fill: false, lineTension: 0, borderWidth: 2, yAxisID: 'y-axis-2'
+                            },
+                            {
+                                label: 'Heater',
+                                borderColor: 'rgba(0, 255, 0, 1.0)',
+                                data: generateData(data, 'heaterStatus'),
+                                pointRadius: 0, fill: false, lineTension: 0, borderWidth: 2, yAxisID: 'y-axis-2'
+                            },
+                            {
+                                label: 'Refill',
+                                borderColor: 'rgba(200, 200, 200, 1.0)',
+                                data: generateData(data, 'refillInProgress'),
+                                pointRadius: 0, fill: false, lineTension: 0, borderWidth: 2, yAxisID: 'y-axis-2'
+                            }
+                        ]
+                    },
+                    options: {
+                        animation: {duration: 0},
+                        maintainAspectRatio: false,
+                        scales: {
+                            xAxes: [{
+                                type: 'time', distribution: 'series', offset: true,
+                                ticks: { major: {enabled: true, fontStyle: 'bold'}, source: 'data', autoSkip: true, autoSkipPadding: 75, maxRotation: 0, sampleSize: 100 },
+                                afterBuildTicks: adaptTicks
+                            }],
+                            yAxes: [
+                                { gridLines: {drawBorder: false}, scaleLabel: {display: true, labelString:'Temperature (°C)'}, position: 'left', id: 'y-axis-1' },
+                                { gridLines: {drawOnChartArea: false}, scaleLabel: {display: true, labelString:'ON/OFF'}, position: 'right', id: 'y-axis-2' }
+                            ]
+                        },
+                        tooltips: {
+                            intersect: false, mode: 'index',
+                            callbacks: { label: (tooltipItem, myData) => (myData.datasets[tooltipItem.datasetIndex].label || '') + ': ' + parseFloat(tooltipItem.value).toFixed(2) }
+                        }
+                    }
+                });
+ 
+                // 2. pH Chart
+                new Chart(document.getElementById('pHChart').getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        datasets: [
+                            { label: 'pH Filtered', borderColor: 'rgba(0, 0, 255, 1.0)', data: generateData(data, 'phValueFiltered'), pointRadius: 0, fill: false, lineTension: 0, borderWidth: 2 },
+                            { label: 'pH', borderColor: 'rgba(255, 99, 132, 1.0)', data: generateData(data, 'phValue'), pointRadius: 0, fill: false, lineTension: 0, borderWidth: 2 }
+                        ]
+                    },
+                    options: {
+                        animation: {duration: 0},
+                        maintainAspectRatio: false,
+                        scales: {
+                            xAxes: [{
+                                type: 'time', distribution: 'series', offset: true,
+                                ticks: { major: {enabled: true, fontStyle: 'bold'}, source: 'data', autoSkip: true, autoSkipPadding: 75, maxRotation: 0, sampleSize: 100 },
+                                afterBuildTicks: adaptTicks
+                            }],
+                            yAxes: [{ gridLines: {drawBorder: false}, scaleLabel: {display: true,labelString:'pH'} }]
+                        },
+                        tooltips: {
+                            intersect: false, mode: 'index',
+                            callbacks: { label: (tooltipItem, myData) => (myData.datasets[tooltipItem.datasetIndex].label || '') + ': ' + parseFloat(tooltipItem.value).toFixed(2) }
+                        }
+                    }
+                });
+ 
+                // 3. Conductivity Chart
+                new Chart(document.getElementById('ConducChart').getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        datasets: [
+                            { label: 'Cond. Filtered', borderColor: 'rgba(0, 0, 255, 1.0)', data: generateData(data, 'conductivityFiltered'), pointRadius: 0, fill: false, lineTension: 0, borderWidth: 2, yAxisID: 'y-axis-1' },
+                            { label: 'Conductivity', borderColor: 'rgba(255, 99, 132, 1.0)', data: generateData(data, 'conductivity'), pointRadius: 0, fill: false, lineTension: 0, borderWidth: 2, yAxisID: 'y-axis-1' },
+                            { label: 'Refill', borderColor: 'rgba(200, 200, 200, 1.0)', data: generateData(data, 'refillInProgress'), pointRadius: 0, fill: false, lineTension: 0, borderWidth: 2, yAxisID: 'y-axis-2' }
+                        ]
+                    },
+                    options: {
+                        animation: {duration: 0},
+                        maintainAspectRatio: false,
+                        scales: {
+                            xAxes: [{
+                                type: 'time', distribution: 'series', offset: true,
+                                ticks: { major: {enabled: true, fontStyle: 'bold'}, source: 'data', autoSkip: true, autoSkipPadding: 75, maxRotation: 0, sampleSize: 100 },
+                                afterBuildTicks: adaptTicks
+                            }],
+                            yAxes: [
+                                { gridLines: {drawBorder: false}, scaleLabel: {display: true, labelString:'Conductivity'}, position: 'left', id: 'y-axis-1' },
+                                { gridLines: {drawOnChartArea: false}, scaleLabel: {display: true, labelString:'ON/OFF'}, position: 'right', id: 'y-axis-2' }
+                            ]
+                        },
+                        tooltips: {
+                            intersect: false, mode: 'index',
+                            callbacks: { label: (tooltipItem, myData) => (myData.datasets[tooltipItem.datasetIndex].label || '') + ': ' + parseFloat(tooltipItem.value).toFixed(2) }
+                        }
+                    }
+                });
+ 
+                // 4. Ambient Chart
+                new Chart(document.getElementById('AmbientChart').getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        datasets: [
+                            { label: 'Amb. Temp', borderColor: 'rgba(0, 0, 255, 1.0)', data: generateData(data, 'ambientTemperature'), pointRadius: 0, fill: false, lineTension: 0, borderWidth: 2, yAxisID: 'y-axis-1' },
+                            { label: 'Amb. Humidity', borderColor: 'rgba(255, 99, 132, 1.0)', data: generateData(data, 'ambientHumidity'), pointRadius: 0, fill: false, lineTension: 0, borderWidth: 2, yAxisID: 'y-axis-2' },
+                            { label: 'Ventilation', borderColor: 'rgba(255, 255, 132, 1.0)', data: generateData(data, 'surfaceVentilationStatus'), pointRadius: 0, fill: false, lineTension: 0, borderWidth: 2, yAxisID: 'y-axis-3' },
+                            { label: 'Heater', borderColor: 'rgba(0, 255, 0, 1.0)', data: generateData(data, 'heaterStatus'), pointRadius: 0, fill: false, lineTension: 0, borderWidth: 2, yAxisID: 'y-axis-3' }
+                        ]
+                    },
+                    options: {
+                        animation: {duration: 0},
+                        maintainAspectRatio: false,
+                        scales: {
+                            xAxes: [{
+                                type: 'time', distribution: 'series', offset: true,
+                                ticks: { major: {enabled: true, fontStyle: 'bold'}, source: 'data', autoSkip: true, autoSkipPadding: 75, maxRotation: 0, sampleSize: 100 },
+                                afterBuildTicks: adaptTicks
+                            }],
+                            yAxes: [
+                                { gridLines: {drawBorder: false}, scaleLabel: {display: true,labelString:'Temperature (°C)'}, position: 'left', id: 'y-axis-1' },
+                                { gridLines: {drawOnChartArea: false}, scaleLabel: {display: true,labelString:'Humidity (%)'}, position: 'right', id: 'y-axis-2' },
+                                { gridLines: {drawOnChartArea: false}, scaleLabel: {display: true,labelString:'ON/OFF'}, position: 'left', id: 'y-axis-3' }
+                            ]
+                        },
+                        tooltips: {
+                            intersect: false, mode: 'index',
+                            callbacks: { label: (tooltipItem, myData) => (myData.datasets[tooltipItem.datasetIndex].label || '') + ': ' + parseFloat(tooltipItem.value).toFixed(2) }
+                        }
+                    }
+                });
+            };
+
+            // Interval management helper
+            let overviewInterval = null;
+            const startIntervals = () => {
+                if(overviewInterval) clearInterval(overviewInterval);
+                overviewInterval = setInterval(fetchOverviewData, 10000);
+            }
+            
+            onMounted(() => {
+                // Attempt to retrieve credentials from Local Storage
+                const storedAuth = localStorage.getItem('aquarium_auth');
+                
+                if (storedAuth) {
+                    // Assume stored credentials are valid for the first attempt
+                    credentials.value = storedAuth;
+                    showAuthDialog.value = false;
+                    
+                    // Start fetching data immediately using the stored credentials
+                    fetchOverviewData();
+                    fetchTimeData();
+                    startIntervals();
+                } else {
+                    // No stored credentials found, keep the dialog open (default showAuthDialog = true)
+                }
+            });
+
+            return {
+                // State for the main app
+                overview, rawChartData, 
+                // State and methods for the auth dialog
+                showAuthDialog, inputUsername, inputPassword, login, loginError
+            }; 
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>
