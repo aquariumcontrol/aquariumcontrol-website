@@ -477,102 +477,71 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
             // -------
 
             // --- DATA GENERATORS (Ported from your script) ---
-            // We use a generic function to reduce code duplication
+            // generic function to reduce code duplication
             const generateData = (dataArray, key) => {
                 return dataArray.map(item => ({
-                    t: moment(item.timestamp).valueOf(),
+                    t: moment(item.timestamp, "YYYY-MM-DD HH:mm:ss").valueOf(),
                     y: item[key]
                 }));
             };
  
-            // --- CHART HELPER: Adapt Ticks (Ported exactly) ---
-            const adaptTicks = (scale, ticks) => {
-                var majorUnit = scale._majorUnit;
-                var firstTick = ticks[0];
-                var i, ilen, val, tick, currMajor, lastMajor;
- 
-                if (!ticks || ticks.length === 0) return ticks;
- 
-                val = moment(ticks[0].value);
-                if ((majorUnit === 'minute' && val.second() === 0)
-                || (majorUnit === 'hour' && val.minute() === 0)
-                || (majorUnit === 'day' && val.hour() === 9)
-                || (majorUnit === 'month' && val.date() <= 3 && val.isoWeekday() === 1)
-                || (majorUnit === 'year' && val.month() === 0)) {
-                    firstTick.major = true;
-                } else {
-                    firstTick.major = false;
-                }
-                lastMajor = val.get(majorUnit);
- 
-                for (i = 1, ilen = ticks.length; i < ilen; i++) {
-                    tick = ticks[i];
-                    val = moment(tick.value);
-                    currMajor = val.get(majorUnit);
-                    tick.major = currMajor !== lastMajor;
-                    lastMajor = currMajor;
-                }
-                return ticks;
-            };
- 
-            // --- MAIN CHART RENDERING ---
+            // --- CHART RENDERING (UPDATED CONFIGURATION) ---
             const renderCharts = (data) => {
+                // Common options for all charts to ensure consistent X-axis
+                const commonOptions = {
+                    animation: { duration: 0 },
+                    maintainAspectRatio: false,
+                    scales: {
+                        xAxes: [{
+                            type: 'time',
+                            distribution: 'linear', 
+                            time: {
+                                // Define how the tooltip displays the time
+                                tooltipFormat: 'll HH:mm:ss',
+                                displayFormats: {
+                                    minute: 'HH:mm',
+                                    hour: 'HH:mm'
+                                }
+                            },
+                            ticks: {
+                                source: 'data', 
+                                autoSkip: true,
+                                maxRotation: 0
+                            }
+                        }]
+                    },
+                    tooltips: {
+                        intersect: false,
+                        mode: 'index',
+                        callbacks: {
+                            label: (tooltipItem, myData) => (myData.datasets[tooltipItem.datasetIndex].label || '') + ': ' + parseFloat(tooltipItem.value).toFixed(2)
+                        }
+                    }
+                };
+
+                // Helper to merge specific Y-axis config with common options
+                const getOptions = (yAxesConfig) => {
+                    const opts = JSON.parse(JSON.stringify(commonOptions)); // Deep copy
+                    opts.scales.yAxes = yAxesConfig;
+                    return opts;
+                };
+
                 // 1. Temperature Chart
                 new Chart(document.getElementById('TempChart').getContext('2d'), {
                     type: 'line',
                     data: {
                         datasets: [
-                            {
-                                label: 'Water Temperature Filtered',
-                                borderColor: 'rgba(0, 0, 255, 1.0)',
-                                data: generateData(data, 'waterTemperatureFiltered'),
-                                pointRadius: 0, fill: false, lineTension: 0, borderWidth: 2, yAxisID: 'y-axis-1'
-                            },
-                            {
-                                label: 'Water Temperature',
-                                borderColor: 'rgba(255, 99, 132, 1.0)',
-                                data: generateData(data, 'waterTemperature'),
-                                pointRadius: 0, fill: false, lineTension: 0, borderWidth: 2, yAxisID: 'y-axis-1'
-                            },
-                            {
-                                label: 'Surface ventilation',
-                                borderColor: 'rgba(255, 255, 132, 1.0)',
-                                data: generateData(data, 'surfaceVentilationStatus'),
-                                pointRadius: 0, fill: false, lineTension: 0, borderWidth: 2, yAxisID: 'y-axis-2'
-                            },
-                            {
-                                label: 'Heater',
-                                borderColor: 'rgba(0, 255, 0, 1.0)',
-                                data: generateData(data, 'heaterStatus'),
-                                pointRadius: 0, fill: false, lineTension: 0, borderWidth: 2, yAxisID: 'y-axis-2'
-                            },
-                            {
-                                label: 'Refill',
-                                borderColor: 'rgba(200, 200, 200, 1.0)',
-                                data: generateData(data, 'refillInProgress'),
-                                pointRadius: 0, fill: false, lineTension: 0, borderWidth: 2, yAxisID: 'y-axis-2'
-                            }
+                            { label: 'Water Temp. Filtered', borderColor: 'blue', data: generateData(data, 'waterTemperatureFiltered'), fill: false, lineTension: 0, borderWidth: 2, pointRadius: 0, yAxisID: 'y-axis-1' },
+                            { label: 'Water Temp.', borderColor: 'red', data: generateData(data, 'waterTemperature'), fill: false, lineTension: 0, borderWidth: 2, pointRadius: 0, yAxisID: 'y-axis-1' },
+                            { label: 'Ventilation', borderColor: 'orange', data: generateData(data, 'surfaceVentilationStatus'), fill: false, lineTension: 0, borderWidth: 2, pointRadius: 0, yAxisID: 'y-axis-2' },
+                            { label: 'Heater', borderColor: 'green', data: generateData(data, 'heaterStatus'), fill: false, lineTension: 0, borderWidth: 2, pointRadius: 0, yAxisID: 'y-axis-2' },
+                            { label: 'Refill', borderColor: 'grey', data: generateData(data, 'refillInProgress'), fill: false, lineTension: 0, borderWidth: 2, pointRadius: 0, yAxisID: 'y-axis-2' }
                         ]
                     },
-                    options: {
-                        animation: {duration: 0},
-                        maintainAspectRatio: false,
-                        scales: {
-                            xAxes: [{
-                                type: 'time', distribution: 'series', offset: true,
-                                ticks: { major: {enabled: true, fontStyle: 'bold'}, source: 'data', autoSkip: true, autoSkipPadding: 75, maxRotation: 0, sampleSize: 100 },
-                                afterBuildTicks: adaptTicks
-                            }],
-                            yAxes: [
-                                { gridLines: {drawBorder: false}, scaleLabel: {display: true, labelString:'Temperature (°C)'}, position: 'left', id: 'y-axis-1' },
-                                { gridLines: {drawOnChartArea: false}, scaleLabel: {display: true, labelString:'ON/OFF'}, position: 'right', id: 'y-axis-2' }
-                            ]
-                        },
-                        tooltips: {
-                            intersect: false, mode: 'index',
-                            callbacks: { label: (tooltipItem, myData) => (myData.datasets[tooltipItem.datasetIndex].label || '') + ': ' + parseFloat(tooltipItem.value).toFixed(2) }
-                        }
-                    }
+                    options: getOptions([
+                        { id: 'y-axis-1', position: 'left', scaleLabel: { display: true, labelString: 'Temperature (°C)' } },
+                        { id: 'y-axis-2', position: 'right', scaleLabel: { display: true, labelString: 'ON/OFF' }, gridLines: { drawOnChartArea: false } }
+                    ])
                 });
  
                 // 2. pH Chart
@@ -580,26 +549,11 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
                     type: 'line',
                     data: {
                         datasets: [
-                            { label: 'pH Filtered', borderColor: 'rgba(0, 0, 255, 1.0)', data: generateData(data, 'phValueFiltered'), pointRadius: 0, fill: false, lineTension: 0, borderWidth: 2 },
-                            { label: 'pH', borderColor: 'rgba(255, 99, 132, 1.0)', data: generateData(data, 'phValue'), pointRadius: 0, fill: false, lineTension: 0, borderWidth: 2 }
+                            { label: 'pH Filtered', borderColor: 'blue', data: generateData(data, 'phValueFiltered'), fill: false, lineTension: 0, borderWidth: 2, pointRadius: 0 },
+                            { label: 'pH', borderColor: 'red', data: generateData(data, 'phValue'), fill: false, lineTension: 0, borderWidth: 2, pointRadius: 0 }
                         ]
                     },
-                    options: {
-                        animation: {duration: 0},
-                        maintainAspectRatio: false,
-                        scales: {
-                            xAxes: [{
-                                type: 'time', distribution: 'series', offset: true,
-                                ticks: { major: {enabled: true, fontStyle: 'bold'}, source: 'data', autoSkip: true, autoSkipPadding: 75, maxRotation: 0, sampleSize: 100 },
-                                afterBuildTicks: adaptTicks
-                            }],
-                            yAxes: [{ gridLines: {drawBorder: false}, scaleLabel: {display: true,labelString:'pH'} }]
-                        },
-                        tooltips: {
-                            intersect: false, mode: 'index',
-                            callbacks: { label: (tooltipItem, myData) => (myData.datasets[tooltipItem.datasetIndex].label || '') + ': ' + parseFloat(tooltipItem.value).toFixed(2) }
-                        }
-                    }
+                    options: getOptions([{ scaleLabel: { display: true, labelString: 'pH' } }])
                 });
  
                 // 3. Conductivity Chart
@@ -607,30 +561,15 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
                     type: 'line',
                     data: {
                         datasets: [
-                            { label: 'Cond. Filtered', borderColor: 'rgba(0, 0, 255, 1.0)', data: generateData(data, 'conductivityFiltered'), pointRadius: 0, fill: false, lineTension: 0, borderWidth: 2, yAxisID: 'y-axis-1' },
-                            { label: 'Conductivity', borderColor: 'rgba(255, 99, 132, 1.0)', data: generateData(data, 'conductivity'), pointRadius: 0, fill: false, lineTension: 0, borderWidth: 2, yAxisID: 'y-axis-1' },
-                            { label: 'Refill', borderColor: 'rgba(200, 200, 200, 1.0)', data: generateData(data, 'refillInProgress'), pointRadius: 0, fill: false, lineTension: 0, borderWidth: 2, yAxisID: 'y-axis-2' }
+                            { label: 'Cond. Filtered', borderColor: 'blue', data: generateData(data, 'conductivityFiltered'), fill: false, lineTension: 0, borderWidth: 2, pointRadius: 0, yAxisID: 'y-axis-1' },
+                            { label: 'Conductivity', borderColor: 'red', data: generateData(data, 'conductivity'), fill: false, lineTension: 0, borderWidth: 2, pointRadius: 0, yAxisID: 'y-axis-1' },
+                            { label: 'Refill', borderColor: 'grey', data: generateData(data, 'refillInProgress'), fill: false, lineTension: 0, borderWidth: 2, pointRadius: 0, yAxisID: 'y-axis-2' }
                         ]
                     },
-                    options: {
-                        animation: {duration: 0},
-                        maintainAspectRatio: false,
-                        scales: {
-                            xAxes: [{
-                                type: 'time', distribution: 'series', offset: true,
-                                ticks: { major: {enabled: true, fontStyle: 'bold'}, source: 'data', autoSkip: true, autoSkipPadding: 75, maxRotation: 0, sampleSize: 100 },
-                                afterBuildTicks: adaptTicks
-                            }],
-                            yAxes: [
-                                { gridLines: {drawBorder: false}, scaleLabel: {display: true, labelString:'Conductivity'}, position: 'left', id: 'y-axis-1' },
-                                { gridLines: {drawOnChartArea: false}, scaleLabel: {display: true, labelString:'ON/OFF'}, position: 'right', id: 'y-axis-2' }
-                            ]
-                        },
-                        tooltips: {
-                            intersect: false, mode: 'index',
-                            callbacks: { label: (tooltipItem, myData) => (myData.datasets[tooltipItem.datasetIndex].label || '') + ': ' + parseFloat(tooltipItem.value).toFixed(2) }
-                        }
-                    }
+                    options: getOptions([
+                        { id: 'y-axis-1', position: 'left', scaleLabel: { display: true, labelString: 'Conductivity' } },
+                        { id: 'y-axis-2', position: 'right', scaleLabel: { display: true, labelString: 'ON/OFF' }, gridLines: { drawOnChartArea: false } }
+                    ])
                 });
  
                 // 4. Ambient Chart
@@ -638,32 +577,17 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
                     type: 'line',
                     data: {
                         datasets: [
-                            { label: 'Amb. Temp', borderColor: 'rgba(0, 0, 255, 1.0)', data: generateData(data, 'ambientTemperature'), pointRadius: 0, fill: false, lineTension: 0, borderWidth: 2, yAxisID: 'y-axis-1' },
-                            { label: 'Amb. Humidity', borderColor: 'rgba(255, 99, 132, 1.0)', data: generateData(data, 'ambientHumidity'), pointRadius: 0, fill: false, lineTension: 0, borderWidth: 2, yAxisID: 'y-axis-2' },
-                            { label: 'Ventilation', borderColor: 'rgba(255, 255, 132, 1.0)', data: generateData(data, 'surfaceVentilationStatus'), pointRadius: 0, fill: false, lineTension: 0, borderWidth: 2, yAxisID: 'y-axis-3' },
-                            { label: 'Heater', borderColor: 'rgba(0, 255, 0, 1.0)', data: generateData(data, 'heaterStatus'), pointRadius: 0, fill: false, lineTension: 0, borderWidth: 2, yAxisID: 'y-axis-3' }
+                            { label: 'Amb. Temp', borderColor: 'blue', data: generateData(data, 'ambientTemperature'), fill: false, lineTension: 0, borderWidth: 2, pointRadius: 0, yAxisID: 'y-axis-1' },
+                            { label: 'Amb. Humidity', borderColor: 'red', data: generateData(data, 'ambientHumidity'), fill: false, lineTension: 0, borderWidth: 2, pointRadius: 0, yAxisID: 'y-axis-2' },
+                            { label: 'Ventilation', borderColor: 'orange', data: generateData(data, 'surfaceVentilationStatus'), fill: false, lineTension: 0, pointRadius: 0, borderWidth: 2, yAxisID: 'y-axis-3' },
+                            { label: 'Heater', borderColor: 'green', data: generateData(data, 'heaterStatus'), fill: false, lineTension: 0, borderWidth: 2, pointRadius: 0, yAxisID: 'y-axis-3' }
                         ]
                     },
-                    options: {
-                        animation: {duration: 0},
-                        maintainAspectRatio: false,
-                        scales: {
-                            xAxes: [{
-                                type: 'time', distribution: 'series', offset: true,
-                                ticks: { major: {enabled: true, fontStyle: 'bold'}, source: 'data', autoSkip: true, autoSkipPadding: 75, maxRotation: 0, sampleSize: 100 },
-                                afterBuildTicks: adaptTicks
-                            }],
-                            yAxes: [
-                                { gridLines: {drawBorder: false}, scaleLabel: {display: true,labelString:'Temperature (°C)'}, position: 'left', id: 'y-axis-1' },
-                                { gridLines: {drawOnChartArea: false}, scaleLabel: {display: true,labelString:'Humidity (%)'}, position: 'right', id: 'y-axis-2' },
-                                { gridLines: {drawOnChartArea: false}, scaleLabel: {display: true,labelString:'ON/OFF'}, position: 'left', id: 'y-axis-3' }
-                            ]
-                        },
-                        tooltips: {
-                            intersect: false, mode: 'index',
-                            callbacks: { label: (tooltipItem, myData) => (myData.datasets[tooltipItem.datasetIndex].label || '') + ': ' + parseFloat(tooltipItem.value).toFixed(2) }
-                        }
-                    }
+                    options: getOptions([
+                        { id: 'y-axis-1', position: 'left', scaleLabel: { display: true, labelString: 'Temp (°C)' } },
+                        { id: 'y-axis-2', position: 'right', scaleLabel: { display: true, labelString: 'Humidity (%)' }, gridLines: { drawOnChartArea: false } },
+                        { id: 'y-axis-3', position: 'left', scaleLabel: { display: true, labelString: 'ON/OFF' }, gridLines: { drawOnChartArea: false } }
+                    ])
                 });
             };
 
