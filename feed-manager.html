@@ -116,8 +116,8 @@
                             <td>
                                 <button class="btn btn-secondary" @click="openEditor(p)">Edit</button>
                                 <button class="btn btn-success" @click="openScheduleModal(p)">Schedule</button>
-                                <button class="btn btn-primary" @click="executeProfile(p.profile_id)">Execute Now</button>
-                                <button class="btn btn-danger" @click="deleteProfile(p.profile_id)">Remove</button>
+                                <button class="btn btn-primary" @click="executeProfile(p)">Execute Now</button>
+                                <button class="btn btn-danger" @click="deleteProfile(p.profileId)">Remove</button>
                             </td>
                         </tr>
                         <tr v-if="profiles.length === 0"><td colspan="3">No profiles found.</td></tr>
@@ -178,26 +178,25 @@
                     <template v-for="i in 10" :key="i">
                         <div class="phase-row">
                             <div class="phase-label">Pause {{ pad(i) }}</div>
-                            <div><input type="number" v-model.number="currentProfile[`Pause${pad(i)}Duration`]" min="0" max="60" step="0.1" @input="updateChart"></div>
+                            <div><input type="number" v-model.number="currentProfile[`pause${pad(i)}Duration`]" min="0" max="60" step="0.1" @input="updateChart"></div>
                             <div v-for="col in columns" :key="'p'+i+col.key">
                                 <label class="toggle-switch">
-                                    <input type="checkbox" v-model="currentProfile[`Pause${pad(i)}${col.key}`]" :true-value="1" :false-value="0" @change="updateChart">
+                                    <input type="checkbox" v-model="currentProfile[`pause${pad(i)}${col.key}`]" :true-value="1" :false-value="0" @change="updateChart">
                                     <span class="slider"></span>
                                 </label>
                             </div>
                         </div>
                         <div class="phase-row">
                             <div class="phase-label">Feed {{ pad(i) }}</div>
-                            <div><input type="number" v-model.number="currentProfile[`Feed${pad(i)}Duration`]" min="0" max="60" step="0.1" @input="updateChart"></div>
+                            <div><input type="number" v-model.number="currentProfile[`feed${pad(i)}Duration`]" min="0" max="60" step="0.1" @input="updateChart"></div>
                             <div v-for="col in columns" :key="'f'+i+col.key">
                                 <label class="toggle-switch">
-                                    <input type="checkbox" v-model="currentProfile[`Feed${pad(i)}${col.key}`]" :true-value="1" :false-value="0" @change="updateChart">
+                                    <input type="checkbox" v-model="currentProfile[`feed${pad(i)}${col.key}`]" :true-value="1" :false-value="0" @change="updateChart">
                                     <span class="slider"></span>
                                 </label>
                             </div>
                         </div>
-                    </template>
-                </div>
+                    </template>                </div>
             </div>
         </div>
     </div>
@@ -257,11 +256,11 @@
             // Editor State
             const currentProfile = ref({});
             const columns = [
-                { key: 'Skimmer', label: 'Skim' },
-                { key: 'MPmp1', label: 'MP1' },
-                { key: 'MPmp2', label: 'MP2' },
-                { key: 'APmp1', label: 'AP1' },
-                { key: 'APmp2', label: 'AP2' }
+                { key: 'Skimmer', label: 'Skimmer' },
+                { key: 'MainPump1', label: 'Main Pump #1' },
+                { key: 'MainPump2', label: 'Main Pump #2' },
+                { key: 'AuxPump1', label: 'Aux. Pump #1' },
+                { key: 'AuxPump2', label: 'Aux. Pump #2' }
             ];
             let chartInstance = null;
 
@@ -271,7 +270,7 @@
             const newProfileName = ref('');
             const scheduleForm = reactive({ profileId: null, profileName: '', timestamp: '', isDaily: false });
 
-            // --- API HELPERS ---
+            // --- API HELPERS (With Debugging) ---
             const api = async (action, method = 'GET', body = null) => {
                 const opts = {
                     method,
@@ -280,9 +279,23 @@
                 if (body) opts.body = JSON.stringify(body);
                 
                 try {
+                        console.log(`[API Request] ${action}`, body); // Log Request
+                    
                     const res = await fetch(`http://localhost:8080/api.php?action=${action}`, opts);
                     if (res.status === 401) window.location.href = 'index.html';
-                    const json = await res.json();
+                    
+                    // DEBUG: Get raw text first to see HTML errors
+                    const rawText = await res.text();
+                    console.log(`[API Response] ${action}:`, rawText); // Log Response
+
+                    // Try to parse JSON
+                    let json;
+                    try {
+                        json = JSON.parse(rawText);
+                    } catch (e) {
+                        throw new Error(`Invalid JSON from Server: ${rawText.substring(0, 150)}...`);
+                    }
+
                     if (!res.ok) throw new Error(json.error || 'Request failed');
                     return json;
                 } catch (e) {
@@ -307,14 +320,14 @@
             const deleteProfile = async (id) => {
                 if (!confirm("Are you sure? This cannot be undone.")) return;
                 try {
-                    await api(`delete_feed_profile&profile_id=${id}`, 'GET');
+                    await api(`delete_feed_profile&profileId=${id}`, 'GET');
                     loadData();
                 } catch(e) {}
             };
 
             const executeProfile = async (p) => {
                 try {
-                    await api(`execute_feed_profile&profile_id=${p.profileId}`, 'GET');
+                    await api(`execute_feed_profile&profileId=${p.profileId}`, 'GET');
                     alert(`Profile ${p.profileName} started.`);
                 } catch(e) {}
             };
@@ -336,20 +349,14 @@
             const confirmCreateProfile = async () => {
                 if (!newProfileName.value) return;
                 try {
-                    const res = await api('create_feed_profile', 'POST', { profileName: newProfileName.value });
+                    // 1. Send create request to API
+                    await api('create_feed_profile', 'POST', { profileName: newProfileName.value });
+                    
+                    // 2. Close the modal
                     showCreateModal.value = false;
-                    // Initialize default structure
-                    const newProfile = { profileId: res.id, profileName: newProfileName.value };
-                    // Fill with defaults (0) for all 10 phases
-                    for(let i=1; i<=10; i++) {
-                        const num = i.toString().padStart(2, '0');
-                        ['Pause','Feed'].forEach(type => {
-                            newProfile[`${type}${num}Duration`] = 0;
-                            columns.forEach(c => newProfile[`${type}${num}${c.key}`] = 0);
-                        });
-                    }
-                    // Open editor immediately
-                    openEditor(newProfile); 
+                    
+                    // 3. Refresh the list to show the new entry
+                    loadData(); 
                 } catch(e) {}
             };
 
@@ -377,24 +384,35 @@
 
             // --- EDITOR LOGIC ---
             const openEditor = (profile) => {
-                // Deep clone and ensure numeric values for chart logic
+                // Deep clone
                 const cloned = JSON.parse(JSON.stringify(profile));
-                // Normalize legacy keys if missing (ensure 0 instead of null)
+
+                // Initialize 10 phases if data is missing or null
+                // Note: We now use lowercase prefixes 'pause' and 'feed'
                 for(let i=1; i<=10; i++) {
                     const num = i.toString().padStart(2, '0');
-                    ['Pause','Feed'].forEach(type => {
-                        if (cloned[`${type}${num}Duration`] == null) cloned[`${type}${num}Duration`] = 0;
+                    ['pause','feed'].forEach(type => {
+                        const durKey = `${type}${num}Duration`;
+                        
+                        // Default to 0 if missing
+                        if (cloned[durKey] == null) cloned[durKey] = 0;
+                        
+                        // Handle the boolean switches
                         columns.forEach(c => {
+                            // c.key is still 'Skimmer', 'MPmp1' etc. from the columns definition.
+                            // We need to match what functions.php generates.
+                            // PHP: Pause01Skimmer -> pause01Skimmer
+                            // So we combine type + num + c.key
                             const key = `${type}${num}${c.key}`;
+                            
                             if (cloned[key] == null) cloned[key] = 0;
-                            cloned[key] = Number(cloned[key]); // ensure number for checkbox mapping
+                            cloned[key] = Number(cloned[key]); 
                         });
                     });
                 }
                 currentProfile.value = cloned;
                 view.value = 'edit';
                 
-                // Wait for view transition then render chart
                 nextTick(() => {
                     renderChart();
                 });
@@ -402,19 +420,51 @@
 
             const saveProfile = async () => {
                 try {
-                    // Update API expects snake_case, but our inputs are PascalCase (legacy).
-                    // The api.php handles this conversion or we send the object as is.
-                    // Based on api.php logic, we just send the JSON and it maps it.
-                    await api('update_feed_profile', 'POST', currentProfile.value);
+                    const p = currentProfile.value;
+                    
+                    // 1. Construct Payload manually to ensure clean data
+                    const payload = {
+                        // Check multiple possible casing variations for ID/Name
+                        profileId: p.profileId || p.profileID || p.ProfileID, 
+                        profileName: p.profileName || p.ProfileName
+                    };
+
+                    // 2. Add Phase Data
+                    for(let i=1; i<=10; i++) {
+                        const num = pad(i);
+                        ['pause', 'feed'].forEach(type => {
+                            // Duration
+                            payload[`${type}${num}Duration`] = p[`${type}${num}Duration`];
+                            
+                            // Switches
+                            columns.forEach(col => {
+                                const key = `${type}${num}${col.key}`;
+                                payload[key] = p[key];
+                            });
+                        });
+                    }
+
+                    // --- DEBUGGING OUTPUT ---
+                    console.group("Save Profile Debug");
+                    console.log("Original Profile Object:", p);
+                    console.log("Cleaned Payload to Send:", payload);
+                    console.groupEnd();
+                    // ------------------------
+
+                    await api('update_feed_profile', 'POST', payload);
+                    
                     view.value = 'list';
                     loadData();
-                } catch(e) {}
+                } catch(e) {
+                    console.error("Save failed:", e);
+                    // The error message is now set by the api() function
+                }
             };
 
             // --- CHART LOGIC (Ported from legacy script) ---
             const generateSignals = () => {
                 const signals = {
-                    Feeder: [], Skimmer: [], MP1: [], MP2: [], AP1: [], AP2: []
+                    Feeder: [], Skimmer: [], MainPump1: [], MainPump2: [], AuxPump1: [], AuxPump2: []
                 };
                 let time = moment().startOf('day'); // Base time 00:00:00
 
@@ -423,10 +473,10 @@
                     const tVal = time.valueOf();
                     signals.Feeder.push({t: tVal, y: isFeed ? 'Feeder ON' : 'OFF'});
                     signals.Skimmer.push({t: tVal, y: skim ? 'Skimmer ON' : 'OFF'});
-                    signals.MP1.push({t: tVal, y: mp1 ? 'Main Pump #1 ON' : 'OFF'});
-                    signals.MP2.push({t: tVal, y: mp2 ? 'Main Pump #2 ON' : 'OFF'});
-                    signals.AP1.push({t: tVal, y: ap1 ? 'Aux. Pump #1 ON' : 'OFF'});
-                    signals.AP2.push({t: tVal, y: ap2 ? 'Aux. Pump #2 ON' : 'OFF'});
+                    signals.MainPump1.push({t: tVal, y: mp1 ? 'Main Pump #1 ON' : 'OFF'});
+                    signals.MainPump2.push({t: tVal, y: mp2 ? 'Main Pump #2 ON' : 'OFF'});
+                    signals.AuxPump1.push({t: tVal, y: ap1 ? 'Aux. Pump #1 ON' : 'OFF'});
+                    signals.AuxPump2.push({t: tVal, y: ap2 ? 'Aux. Pump #2 ON' : 'OFF'});
                     
                     if (dur > 0) {
                         time.add(dur, 'seconds');
@@ -434,23 +484,23 @@
                         // Push end state (stepped line)
                         signals.Feeder.push({t: tEnd, y: isFeed ? 'Feeder ON' : 'OFF'});
                         signals.Skimmer.push({t: tEnd, y: skim ? 'Skimmer ON' : 'OFF'});
-                        signals.MP1.push({t: tEnd, y: mp1 ? 'Main Pump #1 ON' : 'OFF'});
-                        signals.MP2.push({t: tEnd, y: mp2 ? 'Main Pump #2 ON' : 'OFF'});
-                        signals.AP1.push({t: tEnd, y: ap1 ? 'Aux. Pump #1 ON' : 'OFF'});
-                        signals.AP2.push({t: tEnd, y: ap2 ? 'Aux. Pump #2 ON' : 'OFF'});
+                        signals.MainPump1.push({t: tEnd, y: mp1 ? 'Main Pump #1 ON' : 'OFF'});
+                        signals.MainPump2.push({t: tEnd, y: mp2 ? 'Main Pump #2 ON' : 'OFF'});
+                        signals.AuxPump1.push({t: tEnd, y: ap1 ? 'Aux. Pump #1 ON' : 'OFF'});
+                        signals.AuxPump2.push({t: tEnd, y: ap2 ? 'Aux. Pump #2 ON' : 'OFF'});
                     }
                 };
 
                 const p = currentProfile.value;
                 for(let i=1; i<=10; i++) {
                     const num = i.toString().padStart(2, '0');
-                    // Pause Phase
-                    if (p[`Pause${num}Duration`] > 0) {
-                        pushData(p[`Pause${num}Duration`], false, p[`Pause${num}Skimmer`], p[`Pause${num}MPmp1`], p[`Pause${num}MPmp2`], p[`Pause${num}APmp1`], p[`Pause${num}APmp2`]);
+                    
+                    // Use lowercase keys: pause01Duration, feed01Duration
+                    if (p[`pause${num}Duration`] > 0) {
+                        pushData(p[`pause${num}Duration`], false, p[`pause${num}Skimmer`], p[`pause${num}MainPump1`], p[`pause${num}MainPump2`], p[`pause${num}AuxPump1`], p[`pause${num}AuxPump2`]);
                     }
-                    // Feed Phase
-                    if (p[`Feed${num}Duration`] > 0) {
-                        pushData(p[`Feed${num}Duration`], true, p[`Feed${num}Skimmer`], p[`Feed${num}MPmp1`], p[`Feed${num}MPmp2`], p[`Feed${num}APmp1`], p[`Feed${num}APmp2`]);
+                    if (p[`feed${num}Duration`] > 0) {
+                        pushData(p[`feed${num}Duration`], true, p[`feed${num}Skimmer`], p[`feed${num}MainPump1`], p[`feed${num}MainPump2`], p[`feed${num}AuxPump1`], p[`feed${num}AuxPump2`]);
                     }
                 }
                 return signals;
@@ -463,12 +513,12 @@
                 const signals = generateSignals();
 
                 const datasets = [
-                    { label: 'Feeder', borderColor: 'rgba(99, 99, 0, 1)', data: signals.Feeder },
+                    { label: 'Feeder', borderColor: 'rgba(255, 165, 0, 1)', data: signals.Feeder },
                     { label: 'Skimmer', borderColor: 'rgba(60, 60, 60, 1)', data: signals.Skimmer },
-                    { label: 'Main Pump #1', borderColor: 'rgba(0, 255, 0, 1)', data: signals.MP1 },
-                    { label: 'Main Pump #2', borderColor: 'rgba(255, 0, 0, 1)', data: signals.MP2 },
-                    { label: 'Aux. Pump #1', borderColor: 'rgba(0, 0, 255, 1)', data: signals.AP1 },
-                    { label: 'Aux. Pump #2', borderColor: 'rgba(255, 255, 132, 1)', data: signals.AP2 },
+                    { label: 'Main Pump #1', borderColor: 'rgba(0, 255, 0, 1)', data: signals.MainPump1 },
+                    { label: 'Main Pump #2', borderColor: 'rgba(255, 0, 0, 1)', data: signals.MainPump2 },
+                    { label: 'Aux. Pump #1', borderColor: 'rgba(0, 0, 255, 1)', data: signals.AuxPump1 },
+                    { label: 'Aux. Pump #2', borderColor: 'rgba(255, 255, 132, 1)', data: signals.AuxPump2 },
                 ].map(ds => ({ ...ds, type: 'line', pointRadius: 0, fill: false, steppedLine: true, borderWidth: 3 }));
 
                 if (chartInstance) chartInstance.destroy();
@@ -495,10 +545,10 @@
                     const signals = generateSignals();
                     chartInstance.data.datasets[0].data = signals.Feeder;
                     chartInstance.data.datasets[1].data = signals.Skimmer;
-                    chartInstance.data.datasets[2].data = signals.MP1;
-                    chartInstance.data.datasets[3].data = signals.MP2;
-                    chartInstance.data.datasets[4].data = signals.AP1;
-                    chartInstance.data.datasets[5].data = signals.AP2;
+                    chartInstance.data.datasets[2].data = signals.MainPump1;
+                    chartInstance.data.datasets[3].data = signals.MainPump2;
+                    chartInstance.data.datasets[4].data = signals.AuxPump1;
+                    chartInstance.data.datasets[5].data = signals.AuxPump2;
                     chartInstance.update();
                 }
             };
