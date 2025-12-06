@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<!-- Copyright 2025 Uwe Martin
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+-->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Log Viewer - Aquarium Controller</title>
+   
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
+
+    <style>
+        :root {
+            --primary: #1847b8;
+            --text: #333;
+            --bg: #f2f2f2;
+            --card-bg: #ffffff;
+        }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; background-color: var(--bg); color: var(--text); margin: 0; }
+        
+        header { background-color: var(--primary); color: white; padding: 1.5rem 1rem; text-align: center; position: relative; }
+        header h1 { margin: 0; font-weight: 400; text-transform: uppercase; }
+        .back-link { position: absolute; left: 20px; top: 50%; transform: translateY(-50%); color: white; text-decoration: none; font-weight: bold; background: rgba(255,255,255,0.2); padding: 5px 15px; border-radius: 20px; }
+        .back-link:hover { background: rgba(255,255,255,0.4); }
+
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+
+        /* Controls */
+        .controls { display: flex; justify-content: center; margin-bottom: 20px; gap: 10px; }
+        .period-btn { padding: 10px 20px; border: none; background: #ddd; cursor: pointer; border-radius: 5px; font-weight: bold; }
+        .period-btn.active { background-color: var(--primary); color: white; }
+
+        /* Summary Card */
+        .summary-card { background: var(--card-bg); padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 20px; text-align: center; border-left: 5px solid var(--primary); }
+        .summary-card h3 { margin: 0 0 5px 0; }
+
+        /* Table */
+        .table-wrapper { background: var(--card-bg); border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background-color: #f8f9fa; font-weight: 600; color: var(--primary); }
+        tr:hover { background-color: #f1f1f1; }
+        
+        .error-msg { color: red; text-align: center; margin-top: 20px; }
+        .loading { text-align: center; color: #666; padding: 20px; }
+
+        .grouped-totals { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; text-align: left; }
+        .total-item { background: #f8f9fa; padding: 10px; border-radius: 5px; border: 1px solid #e9ecef; display: flex; justify-content: space-between; }
+        .total-item .label { font-weight: 600; color: #555; }
+        .total-item .value { font-weight: bold; color: var(--primary); }
+
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <header>
+        <a href="index.html" class="back-link">← Dashboard</a>
+        <h1>{{ config.title }}</h1>
+    </header>
+
+    <div class="container">
+        <div v-if="error" class="error-msg">
+            <h3>Error</h3>
+            <p>{{ error }}</p>
+            <a href="index.html">Return to Dashboard</a>
+        </div>
+
+        <div v-else>
+            <div class="controls">
+                <button class="period-btn" :class="{ active: period === '24h' }" @click="setPeriod('24h')">Last 24 Hours</button>
+                <button class="period-btn" :class="{ active: period === '7d' }" @click="setPeriod('7d')">Last 7 Days</button>
+            </div>
+
+            <div class="summary-card" v-if="!loading">
+                <h3>{{ config.totalLabel }} ({{ period }})</h3>
+                
+                <div v-if="isGrouped" class="grouped-totals">
+                    <div v-for="(group, id) in groupedTotals" :key="id" class="total-item">
+                        <span class="label">{{ group.label }}:</span>
+                        <span class="value">{{ group.value }} {{ config.unit }}</span>
+                    </div>
+                    <div v-if="Object.keys(groupedTotals).length === 0">No dosing recorded.</div>
+                </div>
+
+                <p v-else style="font-size: 1.5rem; font-weight: bold;">
+                    {{ calculatedTotal }} {{ config.unit }}
+                </p>
+            </div>
+
+            <div class="table-wrapper">
+                <div v-if="loading" class="loading">Loading data...</div>
+                <table v-else>
+                    <thead>
+                        <tr>
+                            <th v-for="col in config.columns" :key="col.key">{{ col.label }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="(row, index) in logs" :key="index">
+                            <td v-for="col in config.columns" :key="col.key">
+                                {{ formatCell(row[col.key], col.type) }}
+                            </td>
+                        </tr>
+                        <tr v-if="logs.length === 0">
+                            <td :colspan="config.columns ? config.columns.length : 1" style="text-align: center;">No events found in this period.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const { createApp, ref, computed, onMounted } = Vue;
+
+    createApp({
+        setup() {
+            // --- STATE ---
+            const period = ref('24h');
+            const logs = ref([]);
+            const loading = ref(false);
+            const error = ref('');
+            const credentials = ref('');
+            const currentType = ref('');
+
+            // --- CONFIGURATION MAP ---
+            const definitions = {
+                refill: {
+                    title: 'Refill Events',
+                    action: 'load_refill_log',
+                    totalLabel: 'Accumulated Volume',
+                    unit: 'L',
+                    sumKey: 'volume',
+                    columns: [
+                        { label: 'Timestamp', key: 'timestamp', type: 'date' },
+                        { label: 'Duration (sec)', key: 'duration' },
+                        { label: 'Volume (L)', key: 'volume', type: 'number' },
+                        { label: 'Error Code', key: 'error_code' }
+                    ]
+                },
+                feed: {
+                    title: 'Feed Events',
+                    action: 'load_feed_log',
+                    totalLabel: 'Accumulated Feeder On-Time',
+                    unit: 'Seconds',
+                    sumKey: 'feeder_on_time',
+                    columns: [
+                        { label: 'Timestamp', key: 'timestamp', type: 'date' },
+                        { label: 'On Time (sec)', key: 'feeder_on_time' },
+                        { label: 'Profile Name', key: 'profile_name' },
+                        { label: 'Profile ID', key: 'profile_id' }
+                    ]
+                },
+                balling: {
+                    title: 'Balling / Dosing Log',
+                    action: 'load_balling_log',
+                    totalLabel: 'Total Dosed per Pump',
+                    unit: 'ml',
+                    sumKey: 'dosing_volume',
+                    groupBy: 'pump_id',
+                    labelKey: 'label', 
+                    columns: [
+                        { label: 'Timestamp', key: 'timestamp', type: 'date' },
+                        { label: 'Pump ID', key: 'pump_id' },
+                        { label: 'Label', key: 'label' },
+                        { label: 'Volume (ml)', key: 'dosing_volume', type: 'number' }
+                    ]
+                }
+            };
+
+            const config = computed(() => definitions[currentType.value] || {});
+            
+            // Helper to check if we are in "grouped mode"
+            const isGrouped = computed(() => !!config.value.groupBy);
+
+            // --- COMPUTED: SINGLE TOTAL (Original logic) ---
+            const calculatedTotal = computed(() => {
+                if (!logs.value.length || !config.value.sumKey) return 0;
+                
+                const sum = logs.value.reduce((acc, item) => {
+                    return acc + (parseFloat(item[config.value.sumKey]) || 0);
+                }, 0);
+
+                return (currentType.value === 'refill') ? sum.toFixed(3) : sum.toFixed(0);
+            });
+
+            // --- COMPUTED: GROUPED TOTALS (New logic) ---
+            const groupedTotals = computed(() => {
+                if (!isGrouped.value || !logs.value.length) return {};
+
+                const groups = {};
+                const sumKey = config.value.sumKey;
+                const groupKey = config.value.groupBy;
+                const labelKey = config.value.labelKey;
+
+                logs.value.forEach(item => {
+                    const id = item[groupKey];
+                    const val = parseFloat(item[sumKey]) || 0;
+                    
+                    if (!groups[id]) {
+                        // Initialize group. Use the label from the row, or fallback to "Pump #ID"
+                        groups[id] = {
+                            value: 0,
+                            label: item[labelKey] || `Pump #${id}` 
+                        };
+                    }
+                    groups[id].value += val;
+                });
+
+                // Format values after summing
+                for (const id in groups) {
+                    groups[id].value = groups[id].value.toFixed(0); // Dosing usually integer ml
+                }
+
+                return groups;
+            });
+
+            // --- HELPERS (Unchanged) ---
+            const formatCell = (val, type) => {
+                if (type === 'date') return moment(val).format('YYYY-MM-DD HH:mm:ss');
+                if (type === 'number') return parseFloat(val);
+                return val;
+            };
+
+            const setPeriod = (p) => {
+                period.value = p;
+                fetchData();
+            };
+
+            // --- API FETCH ---
+            const fetchData = async () => {
+                if (!config.value.action) return;
+                loading.value = true;
+                logs.value = [];
+
+                try {
+                    const url = `http://localhost:8080/api.php?action=${config.value.action}&period=${period.value}`;
+                    
+                    const response = await fetch(url, {
+                        headers: { 'Authorization': credentials.value }
+                    });
+
+                    if (response.status === 401) {
+                        error.value = "Unauthorized. Please log in at the Dashboard.";
+                        return;
+                    }
+                    if (!response.ok) throw new Error("API Error");
+
+                    logs.value = await response.json();
+                } catch (e) {
+                    error.value = "Failed to load data: " + e.message;
+                } finally {
+                    loading.value = false;
+                }
+            };
+
+            // --- INIT ---
+            onMounted(() => {
+                const params = new URLSearchParams(window.location.search);
+                const type = params.get('type');
+                if (!type || !definitions[type]) {
+                    error.value = "Invalid Log Type requested.";
+                    return;
+                }
+                currentType.value = type;
+
+                const storedAuth = localStorage.getItem('aquarium_auth');
+                if (!storedAuth) {
+                    error.value = "You are not logged in. Please go back to the Dashboard.";
+                    return;
+                }
+                credentials.value = storedAuth;
+                fetchData();
+            });
+
+            return {
+                period,
+                logs,
+                loading,
+                error,
+                config,
+                calculatedTotal, // used for Refill/Feed
+                groupedTotals,   // used for Balling
+                isGrouped,       // Switch for the template
+                setPeriod,
+                formatCell
+            };
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>
