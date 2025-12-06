@@ -135,44 +135,47 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
             // --- CONFIGURATION MAP ---
             const definitions = {
                 refill: {
-                    title: 'Refill Events',
+                    title: 'Refill events',
                     action: 'load_refill_log',
                     totalLabel: 'Accumulated Volume',
                     unit: 'L',
                     sumKey: 'volume',
+                    precision: 3,
                     columns: [
                         { label: 'Timestamp', key: 'timestamp', type: 'date' },
                         { label: 'Duration (sec)', key: 'duration' },
                         { label: 'Volume (L)', key: 'volume', type: 'number' },
-                        { label: 'Error Code', key: 'error_code' }
+                        { label: 'Error Code', key: 'errorCode' }
                     ]
                 },
                 feed: {
-                    title: 'Feed Events',
+                    title: 'Feed events',
                     action: 'load_feed_log',
                     totalLabel: 'Accumulated Feeder On-Time',
                     unit: 'Seconds',
-                    sumKey: 'feeder_on_time',
+                    sumKey: 'feederOnTime',
+                    precision: 1,
                     columns: [
                         { label: 'Timestamp', key: 'timestamp', type: 'date' },
-                        { label: 'On Time (sec)', key: 'feeder_on_time' },
-                        { label: 'Profile Name', key: 'profile_name' },
-                        { label: 'Profile ID', key: 'profile_id' }
+                        { label: 'On Time (sec)', key: 'feederOnTime' },
+                        { label: 'Profile Name', key: 'profileName' },
+                        { label: 'Profile ID', key: 'profileId' }
                     ]
                 },
                 balling: {
-                    title: 'Balling / Dosing Log',
+                    title: 'Balling mineral dosing events',
                     action: 'load_balling_log',
-                    totalLabel: 'Total Dosed per Pump',
+                    totalLabel: 'Total dosed volume per pump',
                     unit: 'ml',
-                    sumKey: 'dosing_volume',
-                    groupBy: 'pump_id',
-                    labelKey: 'label', 
+                    sumKey: 'dosingVolume',
+                    groupBy: 'pumpId',
+                    labelKey: 'label',
+                    precision: 1,
                     columns: [
                         { label: 'Timestamp', key: 'timestamp', type: 'date' },
-                        { label: 'Pump ID', key: 'pump_id' },
+                        { label: 'Pump ID', key: 'pumpId' },
                         { label: 'Label', key: 'label' },
-                        { label: 'Volume (ml)', key: 'dosing_volume', type: 'number' }
+                        { label: 'Volume (ml)', key: 'dosingVolume', type: 'number' }
                     ]
                 }
             };
@@ -182,7 +185,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
             // Helper to check if we are in "grouped mode"
             const isGrouped = computed(() => !!config.value.groupBy);
 
-            // --- COMPUTED: SINGLE TOTAL (Original logic) ---
+            // --- COMPUTED: SINGLE TOTAL ---
             const calculatedTotal = computed(() => {
                 if (!logs.value.length || !config.value.sumKey) return 0;
                 
@@ -190,10 +193,12 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
                     return acc + (parseFloat(item[config.value.sumKey]) || 0);
                 }, 0);
 
-                return (currentType.value === 'refill') ? sum.toFixed(3) : sum.toFixed(0);
+                // Use the configured precision, default to 0 if missing
+                const decimals = config.value.precision !== undefined ? config.value.precision : 0;
+                return sum.toFixed(decimals);
             });
 
-            // --- COMPUTED: GROUPED TOTALS (New logic) ---
+            // --- COMPUTED: GROUPED TOTALS ---
             const groupedTotals = computed(() => {
                 if (!isGrouped.value || !logs.value.length) return {};
 
@@ -207,7 +212,6 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
                     const val = parseFloat(item[sumKey]) || 0;
                     
                     if (!groups[id]) {
-                        // Initialize group. Use the label from the row, or fallback to "Pump #ID"
                         groups[id] = {
                             value: 0,
                             label: item[labelKey] || `Pump #${id}` 
@@ -216,9 +220,11 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
                     groups[id].value += val;
                 });
 
-                // Format values after summing
+                // Format values using configured precision
+                const decimals = config.value.precision !== undefined ? config.value.precision : 0;
+                
                 for (const id in groups) {
-                    groups[id].value = groups[id].value.toFixed(0); // Dosing usually integer ml
+                    groups[id].value = groups[id].value.toFixed(decimals); 
                 }
 
                 return groups;
