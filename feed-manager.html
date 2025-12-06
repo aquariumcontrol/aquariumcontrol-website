@@ -127,7 +127,7 @@
 
             <div class="card">
                 <div class="section-header">
-                    <h2>Active Schedule</h2>
+                    <h2>Feed Schedule</h2>
                 </div>
                 <table>
                     <thead>
@@ -167,12 +167,12 @@
                 <div class="phase-grid">
                     <div class="phase-row header">
                         <div>Phase</div>
-                        <div>Dur (s)</div>
+                        <div>Duration (secs)</div>
                         <div title="Skimmer">Skimmer</div>
-                        <div title="Main Pump 1">MP 1</div>
-                        <div title="Main Pump 2">MP 2</div>
-                        <div title="Aux Pump 1">AP 1</div>
-                        <div title="Aux Pump 2">AP 2</div>
+                        <div title="Main Pump 1">Main Pump #1</div>
+                        <div title="Main Pump 2">Main Pump #2</div>
+                        <div title="Aux Pump 1">Aux. Pump #1</div>
+                        <div title="Aux Pump 2">Aux. Pump #2</div>
                     </div>
 
                     <template v-for="i in 10" :key="i">
@@ -272,6 +272,9 @@
 
             // --- API HELPERS (With Debugging) ---
             const api = async (action, method = 'GET', body = null) => {
+                // Clear previous errors immediately before starting a new request
+                error.value = '';
+
                 const opts = {
                     method,
                     headers: { 'Authorization': credentials.value }
@@ -308,9 +311,17 @@
                 loading.value = true;
                 try {
                     profiles.value = await api('load_feed_profiles');
-                    schedule.value = await api('load_feed_schedule');
+                    
+                    const rawSchedule = await api('load_feed_schedule');
+                    
+                    // Convert PHP string "0"/"1" to Javascript Boolean true/false
+                    schedule.value = rawSchedule.map(s => ({
+                        ...s,
+                        isDaily: Boolean(Number(s.isDaily))
+                    }));
+
                 } catch (e) {
-                    // error handled in api wrapper
+                    console.error(e);
                 } finally {
                     loading.value = false;
                 }
