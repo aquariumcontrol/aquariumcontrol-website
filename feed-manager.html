@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feed Manager - Aquarium Controller</title>
+   
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.4/Chart.min.js"></script>
+
+    <style>
+        :root { --primary: #1847b8; --danger: #dc3545; --success: #28a745; --text: #333; --bg: #f2f2f2; --card: #fff; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; background-color: var(--bg); color: var(--text); margin: 0; }
+        
+        /* Header */
+        header { background-color: var(--primary); color: white; padding: 1.5rem; text-align: center; position: relative; }
+        header h1 { margin: 0; font-weight: 400; text-transform: uppercase; }
+        .back-link { position: absolute; left: 20px; top: 50%; transform: translateY(-50%); color: white; text-decoration: none; font-weight: bold; background: rgba(255,255,255,0.2); padding: 5px 15px; border-radius: 20px; }
+        .back-link:hover { background: rgba(255,255,255,0.4); }
+
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+
+        /* Tables & Cards */
+        .card { background: var(--card); border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); padding: 20px; margin-bottom: 20px; }
+        .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        .section-header h2 { margin: 0; color: var(--primary); }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background-color: #f8f9fa; font-weight: 600; color: var(--primary); }
+        tr:hover { background-color: #f8f9fa; }
+
+        /* Buttons */
+        .btn { padding: 8px 16px; border-radius: 20px; border: none; cursor: pointer; color: white; font-size: 0.9rem; margin-right: 5px; text-decoration: none; display: inline-block; }
+        .btn-primary { background-color: var(--primary); }
+        .btn-danger { background-color: var(--danger); }
+        .btn-success { background-color: var(--success); }
+        .btn-secondary { background-color: #6c757d; }
+        .btn:hover { opacity: 0.9; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Editor Styles */
+        .chart-container { height: 300px; margin-bottom: 20px; position: relative; }
+        .phase-grid { display: grid; gap: 10px; }
+        .phase-row { display: grid; grid-template-columns: 80px 100px repeat(5, 1fr); align-items: center; background: #fafafa; padding: 10px; border-radius: 5px; border: 1px solid #eee; }
+        .phase-row.header { background: var(--primary); color: white; font-weight: bold; }
+        .phase-label { font-weight: bold; }
+        
+        /* Toggle Switch */
+        .toggle-switch { position: relative; display: inline-block; width: 40px; height: 20px; }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 2px; bottom: 2px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--primary); }
+        input:checked + .slider:before { transform: translateX(20px); }
+
+        /* Modals */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+        .modal { background: white; padding: 25px; border-radius: 8px; width: 90%; max-width: 500px; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: 600; }
+        .form-group input, .form-group select { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;}
+        
+        .loading { text-align: center; color: #666; padding: 20px; }
+        .error-msg { background: #fee; color: #c00; padding: 10px; border-radius: 4px; margin-bottom: 20px; }
+
+        /* for checkbox alignment in scheduling */
+        .form-group.checkbox-group label {
+            display: flex;       /* Aligns checkbox and text in a row */
+            align-items: center; /* Vertically centers the checkbox with text */
+            cursor: pointer;     /* Shows clickable hand cursor */
+        }
+
+        .form-group.checkbox-group input[type="checkbox"] {
+            width: auto;         /* Overrides the global 100% width */
+            margin-right: 10px;  /* Adds space between checkbox and text */
+            margin-bottom: 0;    /* Removes bottom margin if inherited */
+        }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <header>
+        <a href="index.html" class="back-link">← Dashboard</a>
+        <h1 v-if="view === 'list'">Feed Manager</h1>
+        <h1 v-else-if="view === 'edit'">Edit Profile: {{ currentProfile.profileName }}</h1>
+    </header>
+
+    <div class="container">
+        <div v-if="error" class="error-msg">
+            {{ error }} <button style="float:right; border:none; background:none; cursor:pointer;" @click="error=''">✕</button>
+        </div>
+
+        <div v-if="view === 'list'">
+            
+            <div class="card">
+                <div class="section-header">
+                    <h2>Feed Profiles</h2>
+                    <button class="btn btn-primary" @click="startCreateProfile">New Profile</button>
+                </div>
+                <div v-if="loading" class="loading">Loading...</div>
+                <table v-else>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>ID</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="p in profiles" :key="p.profileId">
+                            <td>{{ p.profileName }}</td>
+                            <td>{{ p.profileId }}</td>
+                            <td>
+                                <button class="btn btn-secondary" @click="openEditor(p)">Edit</button>
+                                <button class="btn btn-success" @click="openScheduleModal(p)">Schedule</button>
+                                <button class="btn btn-primary" @click="executeProfile(p.profile_id)">Execute Now</button>
+                                <button class="btn btn-danger" @click="deleteProfile(p.profile_id)">Remove</button>
+                            </td>
+                        </tr>
+                        <tr v-if="profiles.length === 0"><td colspan="3">No profiles found.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="card">
+                <div class="section-header">
+                    <h2>Active Schedule</h2>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>Profile</th>
+                            <th>Repeat Daily?</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="s in schedule" :key="s.timestamp">
+                            <td>{{ formatTime(s.timestamp) }}</td>
+                            <td>{{ s.profileName }}</td>
+                            <td>{{ s.isDaily ? 'Yes' : 'No' }}</td>
+                            <td>
+                                <button class="btn btn-danger" @click="deleteSchedule(s.timestamp)">Cancel</button>
+                            </td>
+                        </tr>
+                        <tr v-if="schedule.length === 0"><td colspan="4">No upcoming feeds scheduled.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div v-if="view === 'edit'">
+            <div class="card">
+                <div style="margin-bottom: 20px; display: flex; gap: 10px;">
+                    <button class="btn btn-secondary" @click="view = 'list'">Cancel</button>
+                    <button class="btn btn-success" @click="saveProfile">Save Profile</button>
+                </div>
+
+                <div class="chart-container">
+                    <canvas id="feedChart"></canvas>
+                </div>
+
+                <div class="phase-grid">
+                    <div class="phase-row header">
+                        <div>Phase</div>
+                        <div>Dur (s)</div>
+                        <div title="Skimmer">Skimmer</div>
+                        <div title="Main Pump 1">MP 1</div>
+                        <div title="Main Pump 2">MP 2</div>
+                        <div title="Aux Pump 1">AP 1</div>
+                        <div title="Aux Pump 2">AP 2</div>
+                    </div>
+
+                    <template v-for="i in 10" :key="i">
+                        <div class="phase-row">
+                            <div class="phase-label">Pause {{ pad(i) }}</div>
+                            <div><input type="number" v-model.number="currentProfile[`Pause${pad(i)}Duration`]" min="0" max="60" step="0.1" @input="updateChart"></div>
+                            <div v-for="col in columns" :key="'p'+i+col.key">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" v-model="currentProfile[`Pause${pad(i)}${col.key}`]" :true-value="1" :false-value="0" @change="updateChart">
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="phase-row">
+                            <div class="phase-label">Feed {{ pad(i) }}</div>
+                            <div><input type="number" v-model.number="currentProfile[`Feed${pad(i)}Duration`]" min="0" max="60" step="0.1" @input="updateChart"></div>
+                            <div v-for="col in columns" :key="'f'+i+col.key">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" v-model="currentProfile[`Feed${pad(i)}${col.key}`]" :true-value="1" :false-value="0" @change="updateChart">
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" v-if="showScheduleModal">
+        <div class="modal">
+            <h3>Schedule Feeding</h3>
+            <div class="form-group">
+                <label>Profile:</label>
+                <input type="text" :value="scheduleForm.profileName" disabled>
+            </div>
+            <div class="form-group">
+                <label>Date & Time:</label>
+                <input type="datetime-local" v-model="scheduleForm.timestamp">
+            </div>
+            <div class="form-group checkbox-group">
+                <label>
+                    <input type="checkbox" v-model="scheduleForm.isDaily"> Repeat Daily
+                </label>
+            </div>
+            <div style="text-align: right;">
+                <button class="btn btn-secondary" @click="showScheduleModal = false">Cancel</button>
+                <button class="btn btn-primary" @click="confirmSchedule">Schedule</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" v-if="showCreateModal">
+        <div class="modal">
+            <h3>Create New Profile</h3>
+            <div class="form-group">
+                <label>Profile Name:</label>
+                <input type="text" v-model="newProfileName" placeholder="e.g. Vacation Feed">
+            </div>
+            <div style="text-align: right;">
+                <button class="btn btn-secondary" @click="showCreateModal = false">Cancel</button>
+                <button class="btn btn-primary" @click="confirmCreateProfile">Create</button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    const { createApp, ref, reactive, onMounted, nextTick } = Vue;
+
+    createApp({
+        setup() {
+            // --- STATE ---
+            const view = ref('list'); // 'list' | 'edit'
+            const profiles = ref([]);
+            const schedule = ref([]);
+            const loading = ref(false);
+            const error = ref('');
+            const credentials = ref(localStorage.getItem('aquarium_auth') || '');
+
+            // Editor State
+            const currentProfile = ref({});
+            const columns = [
+                { key: 'Skimmer', label: 'Skim' },
+                { key: 'MPmp1', label: 'MP1' },
+                { key: 'MPmp2', label: 'MP2' },
+                { key: 'APmp1', label: 'AP1' },
+                { key: 'APmp2', label: 'AP2' }
+            ];
+            let chartInstance = null;
+
+            // Modals
+            const showScheduleModal = ref(false);
+            const showCreateModal = ref(false);
+            const newProfileName = ref('');
+            const scheduleForm = reactive({ profileId: null, profileName: '', timestamp: '', isDaily: false });
+
+            // --- API HELPERS ---
+            const api = async (action, method = 'GET', body = null) => {
+                const opts = {
+                    method,
+                    headers: { 'Authorization': credentials.value }
+                };
+                if (body) opts.body = JSON.stringify(body);
+                
+                try {
+                    const res = await fetch(`http://localhost:8080/api.php?action=${action}`, opts);
+                    if (res.status === 401) window.location.href = 'index.html';
+                    const json = await res.json();
+                    if (!res.ok) throw new Error(json.error || 'Request failed');
+                    return json;
+                } catch (e) {
+                    error.value = e.message;
+                    throw e;
+                }
+            };
+
+            const loadData = async () => {
+                loading.value = true;
+                try {
+                    profiles.value = await api('load_feed_profiles');
+                    schedule.value = await api('load_feed_schedule');
+                } catch (e) {
+                    // error handled in api wrapper
+                } finally {
+                    loading.value = false;
+                }
+            };
+
+            // --- LIST ACTIONS ---
+            const deleteProfile = async (id) => {
+                if (!confirm("Are you sure? This cannot be undone.")) return;
+                try {
+                    await api(`delete_feed_profile&profile_id=${id}`, 'GET');
+                    loadData();
+                } catch(e) {}
+            };
+
+            const executeProfile = async (p) => {
+                try {
+                    await api(`execute_feed_profile&profile_id=${p.profileId}`, 'GET');
+                    alert(`Profile ${p.profileName} started.`);
+                } catch(e) {}
+            };
+
+            const deleteSchedule = async (timestamp) => {
+                if (!confirm("Remove this scheduled event?")) return;
+                try {
+                    await api('delete_feed_schedule_entry', 'POST', { timestamp });
+                    loadData();
+                } catch(e) {}
+            };
+
+            // --- CREATE PROFILE ---
+            const startCreateProfile = () => {
+                newProfileName.value = '';
+                showCreateModal.value = true;
+            };
+
+            const confirmCreateProfile = async () => {
+                if (!newProfileName.value) return;
+                try {
+                    const res = await api('create_feed_profile', 'POST', { profileName: newProfileName.value });
+                    showCreateModal.value = false;
+                    // Initialize default structure
+                    const newProfile = { profileId: res.id, profileName: newProfileName.value };
+                    // Fill with defaults (0) for all 10 phases
+                    for(let i=1; i<=10; i++) {
+                        const num = i.toString().padStart(2, '0');
+                        ['Pause','Feed'].forEach(type => {
+                            newProfile[`${type}${num}Duration`] = 0;
+                            columns.forEach(c => newProfile[`${type}${num}${c.key}`] = 0);
+                        });
+                    }
+                    // Open editor immediately
+                    openEditor(newProfile); 
+                } catch(e) {}
+            };
+
+            // --- SCHEDULE MODAL ---
+            const openScheduleModal = (p) => {
+                scheduleForm.profileId = p.profileId;
+                scheduleForm.profileName = p.profileName;
+                scheduleForm.isDaily = false;
+                scheduleForm.timestamp = moment().add(5, 'minutes').format("YYYY-MM-DDTHH:mm");
+                showScheduleModal.value = true;
+            };
+
+            const confirmSchedule = async () => {
+                try {
+                    await api('create_feed_schedule_entry', 'POST', {
+                        profileId: scheduleForm.profileId,
+                        timestamp: moment(scheduleForm.timestamp).format("YYYY-MM-DD HH:mm:ss"),
+                        scheduleIsWeekly: 0,
+                        scheduleIsDaily: scheduleForm.isDaily ? 1 : 0
+                    });
+                    showScheduleModal.value = false;
+                    loadData();
+                } catch(e) {}
+            };
+
+            // --- EDITOR LOGIC ---
+            const openEditor = (profile) => {
+                // Deep clone and ensure numeric values for chart logic
+                const cloned = JSON.parse(JSON.stringify(profile));
+                // Normalize legacy keys if missing (ensure 0 instead of null)
+                for(let i=1; i<=10; i++) {
+                    const num = i.toString().padStart(2, '0');
+                    ['Pause','Feed'].forEach(type => {
+                        if (cloned[`${type}${num}Duration`] == null) cloned[`${type}${num}Duration`] = 0;
+                        columns.forEach(c => {
+                            const key = `${type}${num}${c.key}`;
+                            if (cloned[key] == null) cloned[key] = 0;
+                            cloned[key] = Number(cloned[key]); // ensure number for checkbox mapping
+                        });
+                    });
+                }
+                currentProfile.value = cloned;
+                view.value = 'edit';
+                
+                // Wait for view transition then render chart
+                nextTick(() => {
+                    renderChart();
+                });
+            };
+
+            const saveProfile = async () => {
+                try {
+                    // Update API expects snake_case, but our inputs are PascalCase (legacy).
+                    // The api.php handles this conversion or we send the object as is.
+                    // Based on api.php logic, we just send the JSON and it maps it.
+                    await api('update_feed_profile', 'POST', currentProfile.value);
+                    view.value = 'list';
+                    loadData();
+                } catch(e) {}
+            };
+
+            // --- CHART LOGIC (Ported from legacy script) ---
+            const generateSignals = () => {
+                const signals = {
+                    Feeder: [], Skimmer: [], MP1: [], MP2: [], AP1: [], AP2: []
+                };
+                let time = moment().startOf('day'); // Base time 00:00:00
+
+                // Helper to push data point
+                const pushData = (dur, isFeed, skim, mp1, mp2, ap1, ap2) => {
+                    const tVal = time.valueOf();
+                    signals.Feeder.push({t: tVal, y: isFeed ? 'Feeder ON' : 'OFF'});
+                    signals.Skimmer.push({t: tVal, y: skim ? 'Skimmer ON' : 'OFF'});
+                    signals.MP1.push({t: tVal, y: mp1 ? 'Main Pump #1 ON' : 'OFF'});
+                    signals.MP2.push({t: tVal, y: mp2 ? 'Main Pump #2 ON' : 'OFF'});
+                    signals.AP1.push({t: tVal, y: ap1 ? 'Aux. Pump #1 ON' : 'OFF'});
+                    signals.AP2.push({t: tVal, y: ap2 ? 'Aux. Pump #2 ON' : 'OFF'});
+                    
+                    if (dur > 0) {
+                        time.add(dur, 'seconds');
+                        const tEnd = time.valueOf();
+                        // Push end state (stepped line)
+                        signals.Feeder.push({t: tEnd, y: isFeed ? 'Feeder ON' : 'OFF'});
+                        signals.Skimmer.push({t: tEnd, y: skim ? 'Skimmer ON' : 'OFF'});
+                        signals.MP1.push({t: tEnd, y: mp1 ? 'Main Pump #1 ON' : 'OFF'});
+                        signals.MP2.push({t: tEnd, y: mp2 ? 'Main Pump #2 ON' : 'OFF'});
+                        signals.AP1.push({t: tEnd, y: ap1 ? 'Aux. Pump #1 ON' : 'OFF'});
+                        signals.AP2.push({t: tEnd, y: ap2 ? 'Aux. Pump #2 ON' : 'OFF'});
+                    }
+                };
+
+                const p = currentProfile.value;
+                for(let i=1; i<=10; i++) {
+                    const num = i.toString().padStart(2, '0');
+                    // Pause Phase
+                    if (p[`Pause${num}Duration`] > 0) {
+                        pushData(p[`Pause${num}Duration`], false, p[`Pause${num}Skimmer`], p[`Pause${num}MPmp1`], p[`Pause${num}MPmp2`], p[`Pause${num}APmp1`], p[`Pause${num}APmp2`]);
+                    }
+                    // Feed Phase
+                    if (p[`Feed${num}Duration`] > 0) {
+                        pushData(p[`Feed${num}Duration`], true, p[`Feed${num}Skimmer`], p[`Feed${num}MPmp1`], p[`Feed${num}MPmp2`], p[`Feed${num}APmp1`], p[`Feed${num}APmp2`]);
+                    }
+                }
+                return signals;
+            };
+
+            const renderChart = () => {
+                const ctx = document.getElementById('feedChart');
+                if (!ctx) return;
+                
+                const signals = generateSignals();
+
+                const datasets = [
+                    { label: 'Feeder', borderColor: 'rgba(99, 99, 0, 1)', data: signals.Feeder },
+                    { label: 'Skimmer', borderColor: 'rgba(60, 60, 60, 1)', data: signals.Skimmer },
+                    { label: 'Main Pump #1', borderColor: 'rgba(0, 255, 0, 1)', data: signals.MP1 },
+                    { label: 'Main Pump #2', borderColor: 'rgba(255, 0, 0, 1)', data: signals.MP2 },
+                    { label: 'Aux. Pump #1', borderColor: 'rgba(0, 0, 255, 1)', data: signals.AP1 },
+                    { label: 'Aux. Pump #2', borderColor: 'rgba(255, 255, 132, 1)', data: signals.AP2 },
+                ].map(ds => ({ ...ds, type: 'line', pointRadius: 0, fill: false, steppedLine: true, borderWidth: 3 }));
+
+                if (chartInstance) chartInstance.destroy();
+
+                chartInstance = new Chart(ctx, {
+                    type: 'line',
+                    data: { 
+                        yLabels: ['Aux. Pump #2 ON', 'Aux. Pump #1 ON', 'Main Pump #2 ON', 'Main Pump #1 ON', 'Skimmer ON', 'Feeder ON', 'OFF'],
+                        datasets: datasets 
+                    },
+                    options: {
+                        animation: { duration: 0 },
+                        maintainAspectRatio: false,
+                        scales: {
+                            xAxes: [{ type: 'time', time: { unit: 'second', displayFormats: { second: 'mm:ss' } }, distribution: 'linear', ticks: { source: 'data', autoSkip: true } }],
+                            yAxes: [{ type: 'category', position: 'left' }]
+                        }
+                    }
+                });
+            };
+
+            const updateChart = () => {
+                if (view.value === 'edit' && chartInstance) {
+                    const signals = generateSignals();
+                    chartInstance.data.datasets[0].data = signals.Feeder;
+                    chartInstance.data.datasets[1].data = signals.Skimmer;
+                    chartInstance.data.datasets[2].data = signals.MP1;
+                    chartInstance.data.datasets[3].data = signals.MP2;
+                    chartInstance.data.datasets[4].data = signals.AP1;
+                    chartInstance.data.datasets[5].data = signals.AP2;
+                    chartInstance.update();
+                }
+            };
+
+            // --- HELPERS ---
+            const pad = (n) => n.toString().padStart(2, '0');
+            const formatTime = (t) => moment(t).format("YYYY-MM-DD HH:mm:ss");
+
+            onMounted(() => {
+                if (!credentials.value) window.location.href = 'index.html';
+                loadData();
+            });
+
+            return {
+                view, profiles, schedule, loading, error,
+                currentProfile, columns,
+                // List Methods
+                deleteProfile, executeProfile, deleteSchedule, startCreateProfile,
+                // Editor Methods
+                openEditor, saveProfile, updateChart, pad,
+                // Modal Methods
+                showScheduleModal, openScheduleModal, confirmSchedule, scheduleForm,
+                showCreateModal, newProfileName, confirmCreateProfile,
+                // Helpers
+                formatTime
+            };
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>
