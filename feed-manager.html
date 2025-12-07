@@ -85,7 +85,7 @@
     <header>
         <a href="index.html" class="back-link">← Dashboard</a>
         <h1 v-if="view === 'list'">Feed Manager</h1>
-        <h1 v-else-if="view === 'edit'">Edit Profile: {{ currentProfile.profileName }}</h1>
+        <h1 v-else-if="view === 'edit'">Edit Feed Profile: {{ currentProfile.profileName }}</h1>
     </header>
 
     <div class="container">
@@ -178,7 +178,7 @@
                     <template v-for="i in 10" :key="i">
                         <div class="phase-row">
                             <div class="phase-label">Pause {{ pad(i) }}</div>
-                            <div><input type="number" v-model.number="currentProfile[`pause${pad(i)}Duration`]" min="0" max="60" step="0.1" @input="updateChart"></div>
+                            <div><input type="number" v-model.number="currentProfile[`pause${pad(i)}Duration`]" min="0" max="60000" step="0.1" @input="updateChart"></div>
                             <div v-for="col in columns" :key="'p'+i+col.key">
                                 <label class="toggle-switch">
                                     <input type="checkbox" v-model="currentProfile[`pause${pad(i)}${col.key}`]" :true-value="1" :false-value="0" @change="updateChart">
@@ -188,7 +188,7 @@
                         </div>
                         <div class="phase-row">
                             <div class="phase-label">Feed {{ pad(i) }}</div>
-                            <div><input type="number" v-model.number="currentProfile[`feed${pad(i)}Duration`]" min="0" max="60" step="0.1" @input="updateChart"></div>
+                            <div><input type="number" v-model.number="currentProfile[`feed${pad(i)}Duration`]" min="0" max="60000" step="0.1" @input="updateChart"></div>
                             <div v-for="col in columns" :key="'f'+i+col.key">
                                 <label class="toggle-switch">
                                     <input type="checkbox" v-model="currentProfile[`feed${pad(i)}${col.key}`]" :true-value="1" :false-value="0" @change="updateChart">
@@ -407,7 +407,9 @@
                         
                         // Default to 0 if missing
                         if (cloned[durKey] == null) cloned[durKey] = 0;
-                        
+                        // Convert Milliseconds (DB) to Seconds (UI)
+                        cloned[durKey] = cloned[durKey] / 1000;
+
                         // Handle the boolean switches
                         columns.forEach(c => {
                             // c.key is still 'Skimmer', 'MPmp1' etc. from the columns definition.
@@ -444,8 +446,9 @@
                     for(let i=1; i<=10; i++) {
                         const num = pad(i);
                         ['pause', 'feed'].forEach(type => {
-                            // Duration
-                            payload[`${type}${num}Duration`] = p[`${type}${num}Duration`];
+                            // Convert Seconds (UI) to Milliseconds (DB)
+                            // Using Math.round to ensure it sends an integer (e.g., 5.5s -> 5500ms)
+                            payload[`${type}${num}Duration`] = Math.round(p[`${type}${num}Duration`] * 1000);
                             
                             // Switches
                             columns.forEach(col => {
