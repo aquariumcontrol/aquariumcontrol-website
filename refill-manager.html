@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<!-- Copyright 2025 Uwe Martin
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+-->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Refill Manager - Aquarium Controller</title>
+   
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+
+    <style>
+        :root { --primary: #1847b8; --text: #333; --bg: #f2f2f2; --card: #fff; --success: #28a745; --danger: #dc3545; --warning: #ffc107; --neutral: #6c757d; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; background-color: var(--bg); color: var(--text); margin: 0; }
+        
+        /* Header */
+        header { background-color: var(--primary); color: white; padding: 1.5rem; text-align: center; position: relative; }
+        header h1 { margin: 0; font-weight: 400; text-transform: uppercase; font-size: 1.5rem; }
+        .back-link { position: absolute; left: 20px; top: 50%; transform: translateY(-50%); color: white; text-decoration: none; font-weight: bold; background: rgba(255,255,255,0.2); padding: 5px 15px; border-radius: 20px; }
+        .back-link:hover { background: rgba(255,255,255,0.4); }
+
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+
+        /* Error/Loading */
+        .error-msg { background: #fee; color: #c00; padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .success-msg { background: #d4edda; color: #155724; padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .loading { text-align: center; color: #666; padding: 40px; font-size: 1.2rem; }
+
+        /* Status Card */
+        .status-card { background: var(--card); padding: 40px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); text-align: center; margin-bottom: 30px; transition: border-color 0.3s; border-top: 10px solid var(--neutral); }
+        .status-card h2 { margin: 0 0 10px 0; color: #666; font-size: 1rem; text-transform: uppercase; letter-spacing: 1px; }
+        .status-value { font-size: 2.5rem; font-weight: bold; color: var(--text); }
+        .last-updated { font-size: 0.8rem; color: #999; margin-top: 10px; }
+
+        /* State Colors */
+        .state-running { border-color: var(--success); }
+        .state-running .status-value { color: var(--success); }
+        
+        .state-error { border-color: var(--danger); }
+        .state-error .status-value { color: var(--danger); }
+        
+        .state-idle { border-color: var(--neutral); }
+        .state-idle .status-value { color: var(--neutral); }
+
+        /* Controls Grid */
+        .controls-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+        .full-width { grid-column: 1 / -1; }
+
+        /* Buttons */
+        .btn { padding: 20px; border: none; border-radius: 12px; color: white; font-size: 1.1rem; font-weight: bold; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .btn:hover { transform: translateY(-3px); box-shadow: 0 6px 12px rgba(0,0,0,0.15); opacity: 0.9; }
+        .btn:active { transform: translateY(0); }
+        .btn i { font-size: 1.5rem; margin-bottom: 5px; font-style: normal; } /* Placeholder for icons */
+
+        .btn-start { background-color: var(--success); }
+        .btn-stop { background-color: var(--danger); }
+        .btn-reset { background-color: var(--warning); color: #333; }
+
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <header>
+        <a href="index.html" class="back-link">← Dashboard</a>
+        <h1>Refill Manager</h1>
+    </header>
+
+    <div class="container">
+        
+        <div v-if="error" class="error-msg">
+            {{ error }} <button style="float:right; border:none; background:none; cursor:pointer;" @click="error=''">✕</button>
+        </div>
+        <div v-if="success" class="success-msg">
+            {{ success }}
+        </div>
+
+        <div v-if="loading" class="loading">Connecting to controller...</div>
+
+        <div v-else>
+            <div class="status-card" :class="statusClass">
+                <h2>Controller State</h2>
+                <div class="status-value">{{ currentState || 'UNKNOWN' }}</div>
+                <div class="last-updated">Auto-refreshing ({{ lastUpdated }})</div>
+            </div>
+
+            <div class="controls-grid">
+                <button class="btn btn-start" @click="sendCommand('start')">
+                    <i>▶</i> Start Refill
+                </button>
+                
+                <button class="btn btn-stop" @click="sendCommand('stop')">
+                    <i>■</i> Stop Refill
+                </button>
+
+                <button class="btn btn-reset full-width" @click="sendCommand('reset')">
+                    <i>↺</i> Reset Error
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const { createApp, ref, computed, onMounted, onUnmounted } = Vue;
+
+    createApp({
+        setup() {
+            // --- State ---
+            const currentState = ref('');
+            const loading = ref(true);
+            const error = ref('');
+            const success = ref('');
+            const lastUpdated = ref('');
+            const credentials = ref(localStorage.getItem('aquarium_auth') || '');
+            let pollInterval = null;
+
+            // --- API Helper ---
+            const api = async (action, method = 'GET') => {
+                const opts = {
+                    method,
+                    headers: { 'Authorization': credentials.value }
+                };
+                
+                try {
+                    const res = await fetch(`http://localhost:8080/api.php?action=${action}`, opts);
+                    if (res.status === 401) window.location.href = 'index.html';
+                    
+                    const json = await res.json();
+                    if (!res.ok) throw new Error(json.error || 'Request failed');
+                    return json;
+                } catch (e) {
+                    error.value = e.message;
+                    throw e;
+                }
+            };
+
+            // --- Logic ---
+            const loadState = async () => {
+                try {
+                    // API returns { refillControlState: "..." }
+                    const data = await api('load_refill_state');
+                    currentState.value = data.refillControlState;
+                    
+                    const now = new Date();
+                    lastUpdated.value = now.toLocaleTimeString();
+                    
+                    // First load is done
+                    loading.value = false;
+                } catch (e) {
+                    // If polling fails, don't block the UI, just show error
+                    loading.value = false; 
+                }
+            };
+
+            const sendCommand = async (cmd) => {
+                error.value = '';
+                success.value = '';
+                try {
+                    // Endpoint: api.php?action=set_refill_state&command=start
+                    const res = await api(`set_refill_state&command=${cmd}`);
+                    success.value = `Command '${cmd}' sent. Output: ${res.output || 'OK'}`;
+                    
+                    // Immediately refresh state
+                    loadState();
+                    
+                    // Clear success message after 3s
+                    setTimeout(() => success.value = '', 3000);
+                } catch (e) {
+                    // Error set by api wrapper
+                }
+            };
+
+            // --- Computed Styles ---
+            const statusClass = computed(() => {
+                const s = String(currentState.value).toLowerCase();
+                if (s.includes('error') || s.includes('fail')) return 'state-error';
+                if (s.includes('run') || s.includes('fill') || s.includes('on')) return 'state-running';
+                return 'state-idle';
+            });
+
+            // --- Lifecycle ---
+            onMounted(() => {
+                if (!credentials.value) window.location.href = 'index.html';
+                
+                loadState();
+                // Poll every 3 seconds to keep state fresh
+                pollInterval = setInterval(loadState, 3000);
+            });
+
+            onUnmounted(() => {
+                if (pollInterval) clearInterval(pollInterval);
+            });
+
+            return {
+                currentState, loading, error, success, lastUpdated,
+                sendCommand, statusClass
+            };
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>
