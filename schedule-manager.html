@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<!-- Copyright 2025 Uwe Martin
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+-->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Schedule Manager - Aquarium Controller</title>
+   
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+
+    <style>
+        :root { --primary: #1847b8; --accent: #e6e6e6; --text: #333; --bg: #f2f2f2; --card: #fff; --success: #28a745; --track-height: 8px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; background-color: var(--bg); color: var(--text); margin: 0; }
+        
+        /* Header */
+        header { background-color: var(--primary); color: white; padding: 1.5rem; text-align: center; position: relative; }
+        header h1 { margin: 0; font-weight: 400; text-transform: uppercase; font-size: 1.5rem; }
+        .back-link { position: absolute; left: 20px; top: 50%; transform: translateY(-50%); color: white; text-decoration: none; font-weight: bold; background: rgba(255,255,255,0.2); padding: 5px 15px; border-radius: 20px; }
+        .back-link:hover { background: rgba(255,255,255,0.4); }
+
+        .container { max-width: 800px; margin: 0 auto; padding: 20px; }
+
+        /* Error/Loading */
+        .error-msg { background: #fee; color: #c00; padding: 15px; border-radius: 8px; margin-bottom: 20px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .loading { text-align: center; color: #666; padding: 40px; font-size: 1.2rem; }
+
+        /* Card */
+        .card { background: var(--card); padding: 20px 30px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-left: 5px solid var(--primary); margin-bottom: 30px; }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+        .card-header h2 { margin: 0; color: var(--primary); text-transform: capitalize; }
+
+        /* --- DUAL SLIDER STYLING --- */
+        .dual-slider-container { position: relative; width: 100%; height: 50px; margin-bottom: 20px; }
+        .slider-track { position: absolute; width: 100%; height: var(--track-height); background-color: #ddd; top: 50%; transform: translateY(-50%); border-radius: 5px; z-index: 1; }
+        .slider-range { position: absolute; height: var(--track-height); background-color: var(--primary); top: 50%; transform: translateY(-50%); z-index: 2; border-radius: 5px; opacity: 0.8; }
+        .range-input { width: 100%; position: absolute; top: 50%; transform: translateY(-50%); pointer-events: none; -webkit-appearance: none; background: none; z-index: 3; margin: 0; }
+        .range-input::-webkit-slider-thumb { -webkit-appearance: none; pointer-events: auto; height: 24px; width: 24px; border-radius: 50%; background: #fff; border: 2px solid var(--primary); cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.2); margin-top: 0px; }
+        .range-input::-moz-range-thumb { pointer-events: auto; height: 24px; width: 24px; border-radius: 50%; background: #fff; border: 2px solid var(--primary); cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.2); border: none; }
+
+        /* Inputs Area */
+        .values-container { display: flex; justify-content: space-between; gap: 20px; margin-bottom: 10px; }
+        .value-box { text-align: center; flex: 1; padding: 10px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef; }
+        .value-box label { display: block; font-weight: bold; color: #666; margin-bottom: 5px; font-size: 0.85rem; }
+        
+        /* Time Input */
+        input[type=time] { padding: 8px; border: 1px solid #ccc; border-radius: 5px; font-size: 1.1rem; font-weight: bold; color: var(--text); font-family: inherit; }
+
+        /* Toggle Switch */
+        .toggle-wrapper { display: flex; align-items: center; gap: 10px; }
+        .toggle-label { font-weight: bold; color: #555; }
+        .switch { position: relative; display: inline-block; width: 50px; height: 26px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider-switch { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px; }
+        .slider-switch:before { position: absolute; content: ""; height: 20px; width: 20px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider-switch { background-color: var(--success); }
+        input:checked + .slider-switch:before { transform: translateX(24px); }
+
+        /* Save Button */
+        .save-container { position: sticky; bottom: 20px; text-align: center; margin-top: 20px; z-index: 100; }
+        .btn-save { padding: 15px 40px; border: none; border-radius: 30px; background-color: var(--primary); color: white; font-size: 1.1rem; font-weight: bold; cursor: pointer; transition: background 0.3s; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+        .btn-save:hover { background-color: #133a9e; }
+        .btn-save.saved { background-color: var(--success); cursor: default; }
+        
+        .disabled-overlay { opacity: 0.5; pointer-events: none; }
+
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <header>
+        <a href="index.html" class="back-link">← Dashboard</a>
+        <h1>Actuator Schedule</h1>
+    </header>
+
+    <div class="container">
+        
+        <div v-if="error" class="error-msg">
+            {{ error }} <button style="float:right; border:none; background:none; cursor:pointer;" @click="error=''">✕</button>
+        </div>
+
+        <div v-if="loading" class="loading">Loading schedules...</div>
+
+        <div v-else>
+            <div class="card" v-for="(config, type) in schedules" :key="type">
+                
+                <div class="card-header">
+                    <h2>{{ type }} Control</h2>
+                    <div class="toggle-wrapper">
+                        <span class="toggle-label">{{ config.isActive ? 'Limitation active' : 'Limitation inactive' }}</span>
+                        <label class="switch">
+                            <input type="checkbox" v-model="config.isActive">
+                            <span class="slider-switch"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <div :class="{ 'disabled-overlay': !config.isActive }">
+                    <p style="color:#666; font-size: 0.9rem; margin-bottom: 20px;">
+                        Allowed operation interval ({{ formatTimeFromMins(config.start) }} - {{ formatTimeFromMins(config.end) }})
+                    </p>
+
+                    <div class="dual-slider-container">
+                        <div class="slider-track"></div>
+                        <div class="slider-range" :style="getRangeStyle(config)"></div>
+
+                        <input type="range" class="range-input" 
+                               :value="config.start" 
+                               @input="updateStart(type, $event.target.value)"
+                               :min="0" :max="1440" :step="10">
+                        
+                        <input type="range" class="range-input" 
+                               :value="config.end" 
+                               @input="updateEnd(type, $event.target.value)"
+                               :min="0" :max="1440" :step="10">
+                    </div>
+
+                    <div class="values-container">
+                        <div class="value-box">
+                            <label>Start Time</label>
+                            <input type="time" 
+                                   :value="formatTimeFromMins(config.start)"
+                                   @change="updateStart(type, timeToMins($event.target.value))">
+                        </div>
+
+                        <div class="value-box">
+                            <label>Stop Time</label>
+                            <input type="time" 
+                                   :value="formatTimeFromMins(config.end)"
+                                   @change="updateEnd(type, timeToMins($event.target.value))">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="save-container">
+                <button 
+                    class="btn-save" 
+                    :class="{ 'saved': saved }"
+                    @click="saveSettings">
+                    {{ saved ? 'All Schedules Saved ✓' : 'Save Changes' }}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const { createApp, ref, onMounted } = Vue;
+
+    createApp({
+        setup() {
+            // --- Config ---
+            const minGap = 1; // Minimum difference in minutes between start and end
+            const credentials = ref(localStorage.getItem('aquarium_auth') || '');
+            
+            // --- State ---
+            const loading = ref(true);
+            const error = ref('');
+            const saved = ref(false);
+            
+            // Structure holding the state for all actuators
+            // Data maps to: Minutes from midnight (0 - 1440)
+            const schedules = ref({
+                balling:     { start: 0, end: 1440, isActive: false },
+                refill:      { start: 0, end: 1440, isActive: false },
+                ventilation: { start: 0, end: 1440, isActive: false },
+                heating:     { start: 0, end: 1440, isActive: false }
+            });
+
+            // --- API Helper ---
+            const api = async (action, method = 'GET', body = null) => {
+                error.value = '';
+                if(method === 'POST') saved.value = false;
+                const opts = {
+                    method,
+                    headers: { 'Authorization': credentials.value }
+                };
+                if (body) opts.body = JSON.stringify(body);
+                try {
+                    const res = await fetch(`http://localhost:8080/api.php?action=${action}`, opts);
+                    if (res.status === 401) window.location.href = 'index.html';
+                    const text = await res.text();
+                    try {
+                        const json = JSON.parse(text);
+                        if (!res.ok) throw new Error(json.error || 'Request failed');
+                        return json;
+                    } catch (e) { throw new Error(`Invalid Response: ${text.substring(0, 100)}...`); }
+                } catch (e) {
+                    error.value = e.message;
+                    throw e;
+                }
+            };
+
+            // --- Helpers (Time <-> Minutes) ---
+            const timeToMins = (timeStr) => {
+                if(!timeStr) return 0;
+                const [h, m] = timeStr.split(':').map(Number);
+                return (h * 60) + m;
+            };
+
+            const formatTimeFromMins = (mins) => {
+                const h = Math.floor(mins / 60);
+                const m = mins % 60;
+                return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+            };
+
+            const formatSecondsFromMins = (mins) => {
+                return `${formatTimeFromMins(mins)}:00`;
+            };
+
+            // --- Logic ---
+            const loadData = async () => {
+                loading.value = true;
+                try {
+                    const data = await api('load_actuator_schedule');
+                    // Data format: [{scheduleType: "balling", startTime: "08:00:00", stopTime: "20:00:00", isActive: "1"}, ...]
+                    
+                    data.forEach(item => {
+                        const type = item.scheduleType;
+                        if (schedules.value[type]) {
+                            schedules.value[type].start = timeToMins(item.startTime);
+                            schedules.value[type].end = timeToMins(item.stopTime);
+                            schedules.value[type].isActive = Boolean(Number(item.isActive));
+                        }
+                    });
+                } catch (e) {
+                } finally {
+                    loading.value = false;
+                }
+            };
+
+            const saveSettings = async () => {
+                try {
+                    // API requires specific flat JSON keys
+                    const payload = {
+                        ballingRangeStartTime: formatSecondsFromMins(schedules.value.balling.start),
+                        ballingRangeFinishTime: formatSecondsFromMins(schedules.value.balling.end),
+                        ballingRangeIsActive: schedules.value.balling.isActive ? 1 : 0,
+
+                        refillRangeStartTime: formatSecondsFromMins(schedules.value.refill.start),
+                        refillRangeFinishTime: formatSecondsFromMins(schedules.value.refill.end),
+                        refillRangeIsActive: schedules.value.refill.isActive ? 1 : 0,
+
+                        ventilationRangeStartTime: formatSecondsFromMins(schedules.value.ventilation.start),
+                        ventilationRangeFinishTime: formatSecondsFromMins(schedules.value.ventilation.end),
+                        ventilationRangeIsActive: schedules.value.ventilation.isActive ? 1 : 0,
+
+                        heatingRangeStartTime: formatSecondsFromMins(schedules.value.heating.start),
+                        heatingRangeFinishTime: formatSecondsFromMins(schedules.value.heating.end),
+                        heatingRangeIsActive: schedules.value.heating.isActive ? 1 : 0,
+                    };
+
+                    await api('update_actuator_schedule', 'POST', payload);
+                    saved.value = true;
+                    setTimeout(() => { saved.value = false; }, 2000);
+                } catch (e) {}
+            };
+
+            // --- Interaction ---
+            const updateStart = (type, val) => {
+                const v = parseInt(val);
+                const config = schedules.value[type];
+                // Enforce start < end
+                if (v > config.end - minGap) {
+                    config.start = config.end - minGap;
+                } else {
+                    config.start = v;
+                }
+            };
+
+            const updateEnd = (type, val) => {
+                const v = parseInt(val);
+                const config = schedules.value[type];
+                // Enforce end > start
+                if (v < config.start + minGap) {
+                    config.end = config.start + minGap;
+                } else {
+                    config.end = v;
+                }
+            };
+
+            const getRangeStyle = (config) => {
+                const left = (config.start / 1440) * 100;
+                const right = (config.end / 1440) * 100;
+                return {
+                    left: `${left}%`,
+                    width: `${right - left}%`
+                };
+            };
+
+            onMounted(() => {
+                if (!credentials.value) window.location.href = 'index.html';
+                loadData();
+            });
+
+            return {
+                loading, error, saved, schedules,
+                updateStart, updateEnd, saveSettings,
+                getRangeStyle, formatTimeFromMins, timeToMins
+            };
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>
