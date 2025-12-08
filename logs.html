@@ -252,7 +252,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
                 logs.value = [];
 
                 try {
-                    const url = `http://localhost:8080/api.php?action=${config.value.action}&period=${period.value}`;
+                    const url = `api.php?action=${config.value.action}&period=${period.value}`;
                     
                     const response = await fetch(url, {
                         headers: { 'Authorization': credentials.value }

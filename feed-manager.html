@@ -295,7 +295,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
                 try {
                         console.log(`[API Request] ${action}`, body); // Log Request
                     
-                    const res = await fetch(`http://localhost:8080/api.php?action=${action}`, opts);
+                    const res = await fetch(`api.php?action=${action}`, opts);
                     if (res.status === 401) window.location.href = 'index.html';
                     
                     // DEBUG: Get raw text first to see HTML errors

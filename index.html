@@ -423,7 +423,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
                 // 2. Test the credentials against the API's check_auth endpoint
                 try {
                     // Use standard fetch here, but manually add the calculated header
-                    const response = await fetch('http://localhost:8080/api.php?action=check_auth', {
+                    const response = await fetch('api.php?action=check_auth', {
                         headers: {
                             'Authorization': authHeader
                         }
@@ -460,7 +460,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
             const fetchOverviewData = async () => {
                 if (!credentials.value) return; // Skip if not authorized yet
                 try {
-                    const response = await doFetch('http://localhost:8080/api.php?action=load_overview_signals');
+                    const response = await doFetch('api.php?action=load_overview_signals');
                     if(response.ok) {
                         overview.value = await response.json();
                     }
@@ -472,7 +472,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
             const fetchTimeData = async () => {
                 if (!credentials.value) return; // Skip if not authorized yet
                 try {
-                    const res = await doFetch('http://localhost:8080/api.php?action=load_time_data');
+                    const res = await doFetch('api.php?action=load_time_data');
                     if(res.ok) {
                         const json = await res.json();
                         rawChartData.value = json;

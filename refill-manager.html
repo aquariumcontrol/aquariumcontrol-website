@@ -131,7 +131,7 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
                 };
                 
                 try {
-                    const res = await fetch(`http://localhost:8080/api.php?action=${action}`, opts);
+                    const res = await fetch(`api.php?action=${action}`, opts);
                     if (res.status === 401) window.location.href = 'index.html';
                     
                     const json = await res.json();
