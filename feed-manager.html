@@ -396,8 +396,8 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
                     await api('create_feed_schedule_entry', 'POST', {
                         profileId: scheduleForm.profileId,
                         timestamp: moment(scheduleForm.timestamp).format("YYYY-MM-DD HH:mm:ss"),
-                        scheduleIsWeekly: 0,
-                        scheduleIsDaily: scheduleForm.isDaily ? 1 : 0
+                        isWeekly: 0,
+                        isDaily: scheduleForm.isDaily ? 1 : 0
                     });
                     showScheduleModal.value = false;
                     loadData();
