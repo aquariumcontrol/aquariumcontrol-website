@@ -264,7 +264,15 @@ THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR I
                     }
                     if (!response.ok) throw new Error("API Error");
 
-                    logs.value = await response.json();
+                    const data = await response.json();
+                    if (currentType.value === 'feed') {
+                        logs.value = data.map(item => ({
+                            ...item,
+                            feederOnTime: (parseFloat(item.feederOnTime) || 0) / 1000
+                        }));
+                    } else {
+                        logs.value = data;
+                    }
                 } catch (e) {
                     error.value = "Failed to load data: " + e.message;
                 } finally {
